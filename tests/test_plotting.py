@@ -6,6 +6,7 @@ results by `python -m qml_noise.plotting`.
 """
 
 import json
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -68,7 +69,8 @@ def paths(tmp_path):
         "noise_sweep_file": tmp_path / "sweep.jsonl",
         "bc_results_file": tmp_path / "bc.jsonl",
         "bc_classical_file": tmp_path / "bc_classical.jsonl",
-        "adaptive_file": tmp_path / "adaptive.jsonl",
+        "an_vqc_results_file": tmp_path / "an_vqc_results.jsonl",
+        "an_vqc_classical_file": tmp_path / "an_vqc_classical.jsonl",
     }
 
 
@@ -85,7 +87,7 @@ def test_circuit_diagram_is_written_and_named(tmp_path):
 def test_all_main_plots_generated_from_synthetic_results(paths):
     _write(paths["vqc_results_file"], _main_rows())
     _write(paths["classical_results_file"], _classical_rows())
-    report = generate_all_plots(**paths, extension_seeds=SEEDS)
+    report = generate_all_plots(**paths, noise_sweep_seeds=SEEDS, breast_cancer_seeds=SEEDS)
     expected = {
         "circuit_4q_depth2.png", "01_degradation_vs_noise.png", "02_accuracy_vs_depth.png",
         "03_noise_comparison.png", "04_qubits_vs_performance.png", "05_output_distributions.png",
@@ -101,7 +103,7 @@ def test_all_main_plots_generated_from_synthetic_results(paths):
 def test_extension_and_adaptive_plots_skip_gracefully_when_files_missing(paths):
     _write(paths["vqc_results_file"], _main_rows())
     _write(paths["classical_results_file"], _classical_rows())
-    report = generate_all_plots(**paths, extension_seeds=SEEDS)
+    report = generate_all_plots(**paths, noise_sweep_seeds=SEEDS, breast_cancer_seeds=SEEDS)
     assert "07_standard_vs_adaptive" in report.skipped
     assert "extension_noise_sweep" in report.skipped
     assert "extension_breast_cancer" in report.skipped
@@ -157,7 +159,7 @@ def test_noise_sweep_plot_requires_every_pair(paths):
     _write(paths["vqc_results_file"], _main_rows())
     _write(paths["classical_results_file"], _classical_rows())
     _write(paths["noise_sweep_file"], _sweep_rows(SEEDS, drop_last=True))
-    report = generate_all_plots(**paths, extension_seeds=SEEDS)
+    report = generate_all_plots(**paths, noise_sweep_seeds=SEEDS, breast_cancer_seeds=SEEDS)
     assert "extension_noise_sweep" in report.skipped
     assert "incomplete" in report.skipped["extension_noise_sweep"]
 
@@ -166,7 +168,7 @@ def test_noise_sweep_plot_drawn_when_complete(paths):
     _write(paths["vqc_results_file"], _main_rows())
     _write(paths["classical_results_file"], _classical_rows())
     _write(paths["noise_sweep_file"], _sweep_rows(SEEDS))
-    report = generate_all_plots(**paths, extension_seeds=SEEDS)
+    report = generate_all_plots(**paths, noise_sweep_seeds=SEEDS, breast_cancer_seeds=SEEDS)
     assert "extension_noise_sweep.png" in _names(report)
 
 
@@ -189,40 +191,73 @@ def test_breast_cancer_plot_drawn_only_when_vqc_and_classical_complete(paths):
     _write(paths["classical_results_file"], _classical_rows())
     _write(paths["bc_results_file"], _bc_rows(SEEDS))
     # classical missing -> skipped even though VQC rows are complete
-    report = generate_all_plots(**paths, extension_seeds=SEEDS)
+    report = generate_all_plots(**paths, noise_sweep_seeds=SEEDS, breast_cancer_seeds=SEEDS)
     assert "extension_breast_cancer" in report.skipped
 
     _write(paths["bc_classical_file"], _classical_rows(SEEDS))
-    report = generate_all_plots(**paths, extension_seeds=SEEDS)
+    report = generate_all_plots(**paths, noise_sweep_seeds=SEEDS, breast_cancer_seeds=SEEDS)
     assert "extension_breast_cancer.png" in _names(report)
 
 
 def test_breast_cancer_plot_skipped_when_one_seed_missing(paths):
     _write(paths["bc_results_file"], _bc_rows([0]))
     _write(paths["bc_classical_file"], _classical_rows([0]))
-    report = generate_all_plots(**paths, extension_seeds=SEEDS)
+    report = generate_all_plots(**paths, noise_sweep_seeds=SEEDS, breast_cancer_seeds=SEEDS)
     assert "incomplete" in report.skipped["extension_breast_cancer"]
 
 
-# -- adaptive (provisional schema) -------------------------------------------
+# -- AN-VQC (results/an_vqc_results.jsonl + an_vqc_classical_results.jsonl) --
+
+_AN_VQC_QUANTUM_METHODS = ("fixed_vqc", "ideal_best", "shallow_vqc", "an_vqc")
 
 
-def test_adaptive_plot_drawn_with_expected_schema(paths, tmp_path):
-    rows = [
-        {"method": m, "seed": s, "accuracy": a}
-        for m, a in (("fixed_vqc", 0.9), ("an_vqc", 0.92), ("logistic_regression", 1.0))
-        for s in SEEDS
+def _an_vqc_rows(seeds=SEEDS, methods=_AN_VQC_QUANTUM_METHODS, conditions=("ideal", "medium")):
+    return [
+        {"method": m, "seed": s, "noise_condition": c, "accuracy": 0.9, "status": "completed"}
+        for m in methods for s in seeds for c in conditions
     ]
-    df = pd.DataFrame(rows)
-    path = plot_standard_vs_adaptive(df, tmp_path, "adaptive.jsonl")
+
+
+def _an_vqc_classical_rows(seeds=SEEDS):
+    return [
+        {"model_name": m, "seed": s, "accuracy": 1.0}
+        for m in ("logistic_regression", "svm") for s in seeds
+    ]
+
+
+def test_an_vqc_plot_drawn_with_real_schema(tmp_path):
+    df = pd.DataFrame(_an_vqc_rows())
+    cl = pd.DataFrame(_an_vqc_classical_rows())
+    path = plot_standard_vs_adaptive(df, cl, tmp_path, "an_vqc_results.jsonl")
     assert path.name == "07_standard_vs_adaptive.png" and path.exists()
 
 
-def test_adaptive_plot_skips_on_empty_or_bad_schema(tmp_path):
+def test_an_vqc_plot_skips_on_empty_results(tmp_path):
     with pytest.raises(PlotSkipped):
-        plot_standard_vs_adaptive(pd.DataFrame(), tmp_path, "x")
+        plot_standard_vs_adaptive(pd.DataFrame(), pd.DataFrame(_an_vqc_classical_rows()), tmp_path, "x")
+
+
+def test_an_vqc_plot_skips_on_missing_columns(tmp_path):
+    bad = pd.DataFrame([{"method": "an_vqc", "seed": 0}])
     with pytest.raises(PlotSkipped):
-        plot_standard_vs_adaptive(pd.DataFrame([{"method": "a", "seed": 0}]), tmp_path, "x")
+        plot_standard_vs_adaptive(bad, pd.DataFrame(_an_vqc_classical_rows()), tmp_path, "x")
+
+
+def test_an_vqc_plot_skips_when_a_method_is_missing():
+    rows = _an_vqc_rows(methods=("fixed_vqc", "ideal_best", "shallow_vqc"))  # an_vqc missing
+    with pytest.raises(PlotSkipped):
+        plot_standard_vs_adaptive(pd.DataFrame(rows), pd.DataFrame(_an_vqc_classical_rows()), Path("."), "x")
+
+
+def test_an_vqc_plot_skips_when_a_condition_is_missing():
+    rows = _an_vqc_rows(conditions=("ideal",))  # medium missing for every method
+    with pytest.raises(PlotSkipped):
+        plot_standard_vs_adaptive(pd.DataFrame(rows), pd.DataFrame(_an_vqc_classical_rows()), Path("."), "x")
+
+
+def test_an_vqc_plot_skips_on_empty_classical(tmp_path):
+    with pytest.raises(PlotSkipped):
+        plot_standard_vs_adaptive(pd.DataFrame(_an_vqc_rows()), pd.DataFrame(), tmp_path, "x")
 
 
 # -- real saved results (read-only) ------------------------------------------
@@ -235,3 +270,49 @@ def test_real_results_produce_main_plots_without_modifying_them(tmp_path):
     report = generate_all_plots(tmp_path / "plots")
     assert VQC_RESULTS_FILE.read_bytes() == before
     assert {"01_degradation_vs_noise.png", "08_accuracy_mean_std.png"} <= _names(report)
+
+
+def test_extensions_can_require_independent_seed_counts(tmp_path):
+    """Two extensions finishing with different seed counts (e.g. a 3-seed noise
+    sweep alongside a 5-seed Breast Cancer run) must each be checked against
+    their own actual seed count, not one shared value."""
+    _write(tmp_path_vqc := tmp_path / "vqc.jsonl", _main_rows())
+    _write(tmp_path / "classical.jsonl", _classical_rows())
+    sweep_file = tmp_path / "sweep.jsonl"
+    bc_file = tmp_path / "bc.jsonl"
+    bc_classical_file = tmp_path / "bc_classical.jsonl"
+    _write(sweep_file, _sweep_rows([0, 1, 2]))  # only 3 seeds
+    _write(bc_file, _bc_rows([0, 1, 2, 3, 4]))  # 5 seeds
+    _write(bc_classical_file, _classical_rows([0, 1, 2, 3, 4]))
+
+    report = generate_all_plots(
+        tmp_path / "plots",
+        vqc_results_file=tmp_path_vqc,
+        classical_results_file=tmp_path / "classical.jsonl",
+        noise_sweep_file=sweep_file,
+        bc_results_file=bc_file,
+        bc_classical_file=bc_classical_file,
+        noise_sweep_seeds=[0, 1, 2],
+        breast_cancer_seeds=[0, 1, 2, 3, 4],
+    )
+    assert "extension_noise_sweep.png" in _names(report)
+    assert "extension_breast_cancer.png" in _names(report)
+    assert "extension_noise_sweep" not in report.skipped
+    assert "extension_breast_cancer" not in report.skipped
+
+
+def test_mismatched_seed_requirement_still_correctly_skips(tmp_path):
+    """Sanity check of the fix: requiring 5 seeds from a genuinely 3-seed
+    extension must still report it incomplete, not silently pass."""
+    sweep_file = tmp_path / "sweep.jsonl"
+    _write(sweep_file, _sweep_rows([0, 1, 2]))
+    report = generate_all_plots(
+        tmp_path / "plots",
+        vqc_results_file=tmp_path / "missing_vqc.jsonl",
+        classical_results_file=tmp_path / "missing_classical.jsonl",
+        noise_sweep_file=sweep_file,
+        bc_results_file=tmp_path / "missing_bc.jsonl",
+        bc_classical_file=tmp_path / "missing_bc_classical.jsonl",
+        noise_sweep_seeds=[0, 1, 2, 3, 4],  # wrong on purpose -- sweep only has 0,1,2
+    )
+    assert "incomplete" in report.skipped["extension_noise_sweep"]

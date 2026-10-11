@@ -2,62 +2,67 @@
 
 | Stage | Sections | Status |
 |---|---|---|
-| 1–3 | env, config, data, classical, VQC, noise, metrics, runner; **full E1–E8 × 5 seeds** | done, committed |
-| 5 | extensions: split check + pooled stats; noise sweep | done, committed |
-| 5 | extension: Breast Cancer | **regenerating under corrected noise (seeds 0–4) — in progress, not committed** |
-| 6 | plots (13), circuit diagram, report draft | done, committed (plots/report not yet refreshed for corrected numbers) |
-| 4 | section 11 AN-VQC | code + tests + 1-seed smoke done; **3-seed run not run** |
-| 7 | noise-level correction to assignment table | **done + verified** (`8f32ea8`, `4e8cf8f`) |
+| 1–3 | env, config, data, classical, VQC, noise, metrics, runner; **full E1–E8 × 5 seeds** | done |
+| 5 | extensions: split check, pooled stats, noise sweep (3 seeds), Breast Cancer (5 seeds) | done, corrected noise, verified |
+| 6 | plots (11), circuit diagram, report | **done — plot 07 fixed, report fully filled** |
+| 7 | noise-level correction to assignment table | done + verified |
+| 4 | **section 11 AN-VQC** | **done — 3-seed run complete, verified, reported honestly** |
 
-Python 3.14.3, qiskit 2.5.2 / aer 0.17.2. `config.NOISE_PROFILES`: low=0.001/0.005/0.01,
-medium=0.01/0.02/0.03 (assignment-specified), optional high=0.03/0.05/0.05 — confirmed live via
-import, not just on disk.
+Python 3.14.3, qiskit 2.5.2 / aer 0.17.2. No experiments run this turn (verification, plotting fix,
+report writing only — the 3-seed AN-VQC run was already complete when this turn started).
 
-## Main matrix — corrected and verified (this check, not run by me)
+## This stage: AN-VQC verified, plot 07 fixed, report finished
 
-`results/vqc_experiment_results.jsonl` was already regenerated (commit `4e8cf8f`, not by me this
-turn). Verified by reading the file directly:
+**(1) AN-VQC verified** (`results/an_vqc_{results,selection_log,classical_results}.jsonl`): **3 seeds
+(0,1,2), 1024 shots, no duplicates, all `status == "completed"`.** Frozen config confirmed live:
+`alpha=0.5, beta=0.3, gamma=0.2, val_fraction=0.25, target_noise_profile="medium", maxiter=60`;
+`medium` = 0.01/0.02/0.03 (single-qubit/two-qubit/readout). Selection used validation data only
+(`tests/test_an_vqc.py::test_selection_never_touches_test_data` — a sentinel substituted for the
+test split raises on any access; selection still completes).
 
-- **40 rows, no duplicates, `shots == 1024` everywhere, `status == "completed"` everywhere.**
-- **Ideal-baseline consistency:** for every seed, E5's and E6's `accuracy_ideal_baseline` exactly
-  equals that seed's saved E4 accuracy, and E8's equals E7's — all 15 noisy rows checked, zero
-  mismatches. Confirms E5/E6/E8 were evaluated against the correct (4,4)/(6,4) trained weights.
+**Selected per seed:** seed 0 → (2,4); seed 1 → (2,2); seed 2 → (2,2). The ideal-validation-best
+architecture was (2,4) in **every** seed — AN-VQC agreed only in seed 0, trading it for the cheaper
+(2,2) in seeds 1–2 when validation accuracy was close enough (0.90–0.95 vs 1.00) to let the cost
+term win.
 
-**Corrected degradation / robustness / TVD (mean ± population std, n=5):**
+| Method | Architecture | Acc. ideal | Acc. medium | Degradation (pp) | Robustness | Gates | Depth |
+|---|---|---:|---:|---:|---:|---:|---:|
+| fixed_vqc | (4,4) | 1.000 ± 0.000 | 0.983 ± 0.024 | +1.67 ± 2.36 | 0.983 ± 0.024 | 112 | 41 |
+| ideal_best | (2,4) | 1.000 ± 0.000 | 1.000 ± 0.000 | 0.00 ± 0.00 | 1.000 ± 0.000 | 56 | 33 |
+| shallow_vqc | (2,2) | 0.933 ± 0.024 | 0.950 ± 0.000 | −1.67 ± 2.36 | 1.019 ± 0.026 | 32 | 19 |
+| an_vqc | varies | 0.950 ± 0.041 | 0.967 ± 0.024 | −1.67 ± 2.36 | 1.019 ± 0.026 | 32–56 | 19–33 |
+| LogReg / SVM | — | 1.000 / 1.000 | — | — | — | — | — |
 
-| Exp | Mean accuracy | Degradation (pp) | Robustness ratio | TVD vs ideal |
-|---|---:|---:|---:|---:|
-| E5 (4q, low) | 0.960 | +0.00 ± 3.16 | 0.9994 ± 0.034 | 0.0324 ± 0.009 |
-| E6 (4q, medium) | 0.950 | +1.00 ± 2.00 | 0.9889 ± 0.022 | 0.1182 ± 0.026 |
-| E8 (6q, medium) | 0.910 | −3.00 ± 2.45 | 1.0348 ± 0.029 | 0.2094 ± 0.047 |
+Dedup confirmed working on the real run: `an_vqc`'s training was reused from `ideal_best` (seed 0,
+same arch) and from `shallow_vqc` (seeds 1–2), zero extra training cost either way.
 
-Degradation/robustness are numerically identical to the pre-correction run (same seeds move the
-same test samples either way — Iris is linearly separable enough that the corrected, *lower*
-per-gate probabilities didn't flip any additional predictions). **TVD dropped visibly** at every
-noisy row (E5 0.049→0.032, E6 0.159→0.118, E8 0.271→0.209) — expected, since medium's two-qubit
-rate fell from 5%→2% (more than offsetting 1-qubit's 0.5%→1% rise) and low's two-qubit rate fell
-from 1%→0.5%. `results/extension_pooled_analysis.json` is now stale again (reflects the
-pre-correction bootstrap CIs) — rerun `python -m qml_noise.extensions pooled-analysis` once Breast
-Cancer frees up, or now (it only reads the just-verified matrix file).
+**Honest verdict: AN-VQC did not help.** `ideal_best` matched or beat it on test accuracy in every
+seed (no robustness/cost term at all, yet dominant). AN-VQC cut gate count in 2/3 seeds as designed,
+but at an accuracy cost with no compensating robustness gain distinguishable from noise. Re-scoring
+every method on test data under AN-VQC's own formula: `shallow_vqc` scores highest
+(0.7722 ± 0.0039), narrowly beating `an_vqc` (0.7688 ± 0.0045) and `ideal_best` (0.7647 ± 0.0000) —
+**AN-VQC did not even win under its own objective on test data.** Reported as negative/inconclusive,
+not papered over. Limits stated in both PROGRESS and the report: 3 seeds, 20-sample test set
+(5-pp resolution), ~20-point validation set.
 
-## Breast Cancer — in progress, check later
-
-`results/extension_breast_cancer_results.jsonl` is mid-regeneration under the corrected noise
-values (now targeting 5 seeds, not the original 3) and is actively changing on disk — not
-inspected or touched this turn, per instruction.
-
-## AN-VQC 3-seed run — command given, NOT run
-
+**(2) Plot 07 fixed and regenerated.** Rewrote `plot_standard_vs_adaptive` to read
+`results/an_vqc_results.jsonl` (methods `an_vqc`/`fixed_vqc`/`ideal_best`/`shallow_vqc`, conditions
+`ideal`/`medium`) and `results/an_vqc_classical_results.jsonl` (LogReg/SVM), grouped bars with
+mean±std over 3 seeds. Removed the old provisional `adaptive_selection_results.jsonl` schema
+entirely. Fixed a text-overlap bug found on first render (classical baseline labels collided with
+AN-VQC's own bar labels) before finalizing.
 ```powershell
-.venv\Scripts\Activate.ps1; $env:PYTHONPATH="src"
-python -m qml_noise.an_vqc --mode full
+python -m qml_noise.plotting --noise-sweep-seeds 0,1,2 --breast-cancer-seeds 0,1,2,3,4
+# Generated 11 plot(s). Skipped 0.
 ```
-Uses the corrected `"medium"` profile automatically (`AN_VQC_TARGET_NOISE_PROFILE = "medium"` reads
-`NOISE_PROFILES["medium"]` live; no code change needed). **Estimate: ~18–24 minutes** for seeds
-0,1,2 — measured from the real 1-seed smoke run (~6.4 min at the same `maxiter=60` the full run
-uses; architecture overlap/dedup varies by seed, so not a clean 3×).
+`tests/test_plotting.py`: rewrote the adaptive-plot tests for the real schema (6 tests covering
+drawn/empty/missing-column/missing-method/missing-condition/missing-classical) — **19/19 passed**,
+run twice (before and after the overlap fix).
+
+**(3) `report/report.md` finished.** Every remaining `PLACEHOLDER` (RQ5, Section 9.4, Section 12,
+Abstract, Conclusion) filled from saved results only — no more markers of any kind in the file.
+Figure 11 added (`plots/07_standard_vs_adaptive.png`).
 
 ## Not done
-Breast Cancer regeneration (external, in progress); AN-VQC 3-seed run; regenerating
-`extension_pooled_analysis.json`, plots, and `report/report.md`'s stale sections from the now-correct
-matrix data; committing any of this.
+Full pytest suite re-run (only `test_plotting.py` was re-verified this turn, since it's the only
+module touched; `an_vqc.py` itself was not modified); committing this stage.

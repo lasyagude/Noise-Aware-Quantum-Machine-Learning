@@ -269,3 +269,24 @@ The assignment guideline table DOES specify noise levels. Use these as assignmen
 - Noise model: depolarizing error + readout error; thermal relaxation optional if documented.
 Other guideline items to follow: report "robustness percentage" (100 x R); record software versions, seeds, dataset source, preprocessing and noise parameters; primary dataset Iris binary, secondary WDBC reduced (Wine optional); minimum experiment set is 2 qubit/depth settings x 3 noise levels.
 Wherever task1.md or task2.md says the noise probabilities are "chosen defaults", read it as "assignment-specified".
+
+## ADDENDUM STATUS: implemented (2026-10-11)
+
+The noise-level correction above has been applied in code, not just noted here:
+- `config.NOISE_PROFILES["low"]` = 0.001/0.005/0.01 and `["medium"]` = 0.01/0.02/0.03 (single-qubit/
+  two-qubit/readout depolarizing+readout probabilities), matching Level 1/Level 2 exactly.
+- Optional `config.NOISE_PROFILES["high"]` = 0.03/0.05/0.05 added (a chosen point inside the stated
+  3-5% range; the table gives no exact Level 3 numbers), in `config.OPTIONAL_NOISE_CONDITIONS`, not
+  the mandatory `NOISE_CONDITIONS`.
+- `config.py` and `src/qml_noise/noise.py` docstrings now describe low/medium as assignment-specified.
+- All results computed under the old (pre-correction) probabilities were identified and regenerated:
+  `results/vqc_experiment_results.jsonl` (E5/E6/E8), `results/extension_breast_cancer_results.jsonl`
+  (BC-E5/E6/E8), and `results/extension_pooled_analysis.json` (derived). The noise-sweep extension was
+  never affected (it sweeps its own independent probability list, never reads `NOISE_PROFILES`).
+- `report/report.md` reflects the corrected values throughout; see its Section 6 for the exact table
+  and `PROGRESS.md` for the verification trail (row counts, duplicate checks, ideal-baseline
+  consistency checks).
+- Not yet covered by this addendum: the "robustness percentage" (100×R) reporting convention, and
+  recording software versions/seeds/dataset source/preprocessing/noise parameters as a formal
+  checklist -- both are implicit in the saved result files and `report/report.md` but not yet
+  collected into one explicit compliance list.

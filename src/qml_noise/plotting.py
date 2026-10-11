@@ -14,7 +14,7 @@ Required plots (assignment numbering)
 4. ``04_qubits_vs_performance.png``       accuracy and transpiled depth vs qubits
 5. ``05_output_distributions.png``        ideal vs noisy measurement distributions
 6. ``06_classical_vs_qml.png``            LogReg/SVM vs ideal vs noisy VQC
-7. ``07_standard_vs_adaptive.png``        standard vs adaptive VQC (needs AN-VQC results)
+7. ``07_standard_vs_adaptive.png``        standard VQC baselines vs AN-VQC, ideal + medium noise
 8. ``08_accuracy_mean_std.png``           mean +/- std across seeds, all experiments
 
 Extension plots (``extension_*.png``) cover the noise sweep and Breast Cancer.
@@ -22,11 +22,11 @@ They are only drawn when the extension's result files are COMPLETE (every
 expected ``(experiment, seed)`` pair present); a partial run is skipped with
 a logged reason rather than plotted as if it were finished.
 
-Plot 7 reads ``results/adaptive_selection_results.jsonl``, a file that does
-not exist yet because AN-VQC is not implemented. The schema this module
-expects is provisional: one JSON object per line with ``method`` (str),
-``seed`` (int) and ``accuracy`` (float). Until that file exists the plot is
-skipped.
+Plot 7 reads ``results/an_vqc_results.jsonl`` (methods ``fixed_vqc``/
+``ideal_best``/``shallow_vqc``/``an_vqc``, each with ``ideal`` and
+``medium`` rows) and ``results/an_vqc_classical_results.jsonl``
+(``logistic_regression``/``svm``). It is skipped if either file is missing,
+empty, or any of the four quantum methods lacks both noise conditions.
 
 Colour: categorical slots 1-3 of the dataviz skill's validated palette
 (blue, orange, aqua; passes the all-pairs CVD/normal-vision checks). The
@@ -53,7 +53,6 @@ from qml_noise.config import (  # noqa: E402
     NOISE_SWEEP_TWO_QUBIT_PROBABILITIES,
     PLOTS_DIR,
     RANDOM_SEEDS,
-    RESULTS_DIR,
     get_logger,
 )
 from qml_noise.experiments import (  # noqa: E402
@@ -68,10 +67,12 @@ from qml_noise.extensions import (  # noqa: E402
     NOISE_SWEEP_ARCHITECTURES,
     NOISE_SWEEP_FILE,
 )
+from qml_noise.an_vqc import (  # noqa: E402
+    AN_VQC_CLASSICAL_FILE,
+    AN_VQC_RESULTS_FILE,
+)
 
 logger = get_logger(__name__)
-
-ADAPTIVE_RESULTS_FILE: Path = RESULTS_DIR / "adaptive_selection_results.jsonl"
 
 # Validated categorical slots 1-3 (light surface) + neutral ink tokens.
 BLUE, ORANGE, AQUA = "#2a78d6", "#eb6834", "#1baf7a"
@@ -475,31 +476,85 @@ def plot_classical_vs_qml(main: pd.DataFrame, classical: pd.DataFrame, out_dir: 
     return _save(fig, out_dir / "06_classical_vs_qml.png")
 
 
-def plot_standard_vs_adaptive(adaptive: pd.DataFrame, out_dir: Path, source: str) -> Path:
-    if adaptive.empty:
-        raise PlotSkipped(
-            "standard vs adaptive VQC: results/adaptive_selection_results.jsonl not found "
-            "(AN-VQC not implemented / not run yet)"
-        )
-    missing = {"method", "seed", "accuracy"} - set(adaptive.columns)
+_AN_VQC_METHOD_ORDER: tuple[str, ...] = ("fixed_vqc", "ideal_best", "shallow_vqc", "an_vqc")
+_AN_VQC_METHOD_LABELS: dict[str, str] = {
+    "fixed_vqc": "fixed\n(4q, d4)",
+    "ideal_best": "ideal-\nvalidation-best",
+    "shallow_vqc": "shallow\n(2q, d2)",
+    "an_vqc": "AN-VQC",
+}
+
+
+def plot_standard_vs_adaptive(
+    an_vqc: pd.DataFrame, an_vqc_classical: pd.DataFrame, out_dir: Path, source: str
+) -> Path:
+    """Standard VQC baselines vs AN-VQC, plus Logistic Regression/SVM, ideal and medium noise.
+
+    Reads ``results/an_vqc_results.jsonl`` (methods ``fixed_vqc``/``ideal_best``/``shallow_vqc``/
+    ``an_vqc``, each with ``ideal`` and ``medium`` rows) and
+    ``results/an_vqc_classical_results.jsonl`` (``logistic_regression``/``svm``, no noise axis).
+    """
+    if an_vqc.empty:
+        raise PlotSkipped("standard vs adaptive VQC: results/an_vqc_results.jsonl not found / empty")
+    missing = {"method", "seed", "accuracy", "noise_condition", "status"} - set(an_vqc.columns)
     if missing:
-        raise PlotSkipped(f"standard vs adaptive VQC: adaptive results missing columns {sorted(missing)}")
+        raise PlotSkipped(f"standard vs adaptive VQC: an_vqc results missing columns {sorted(missing)}")
+    an_vqc = _completed(an_vqc)
+    present_methods = set(an_vqc["method"])
+    missing_methods = set(_AN_VQC_METHOD_ORDER) - present_methods
+    if missing_methods:
+        raise PlotSkipped(f"standard vs adaptive VQC: missing method(s) {sorted(missing_methods)}")
+    for method in _AN_VQC_METHOD_ORDER:
+        sub = an_vqc[an_vqc.method == method]
+        conditions = set(sub["noise_condition"])
+        if not {"ideal", "medium"} <= conditions:
+            raise PlotSkipped(f"standard vs adaptive VQC: method '{method}' missing ideal/medium rows")
+    if an_vqc_classical.empty:
+        raise PlotSkipped("standard vs adaptive VQC: results/an_vqc_classical_results.jsonl not found / empty")
+
     _style()
-    g = adaptive.groupby("method")["accuracy"]
-    stats = pd.DataFrame({"mean": g.mean(), "std": g.std(ddof=0)})
-    fig, ax = plt.subplots(figsize=(8, 4.4))
-    for x, (method, row) in enumerate(stats.iterrows()):
-        classical = method in ("logistic_regression", "svm")
-        ax.bar(x, row["mean"], 0.62, color=NEUTRAL if classical else BLUE, hatch="//" if classical else "",
-               edgecolor=SURFACE, yerr=row["std"], capsize=3, error_kw={"ecolor": INK2, "lw": 1}, zorder=3)
-        _seed_dots(ax, x, adaptive.loc[adaptive.method == method, "accuracy"], INK2)
-        ax.annotate(f"{row['mean']:.2f}", (x, row["mean"] + row["std"]), textcoords="offset points",
-                    xytext=(0, 4), ha="center", fontsize=8)
-    ax.set_xticks(range(len(stats)), [m.replace("_", " ") for m in stats.index], rotation=20, ha="right")
-    ax.set_ylim(0, 1.15)
+    fig, ax = plt.subplots(figsize=(10, 4.8))
+    width, group_gap = 0.34, 0.5
+    pos = 0.0
+    ticks, tick_labels = [], []
+    for method in _AN_VQC_METHOD_ORDER:
+        start = pos
+        for condition in ("ideal", "medium"):
+            sub = an_vqc[(an_vqc.method == method) & (an_vqc.noise_condition == condition)]
+            mean, std = sub["accuracy"].mean(), sub["accuracy"].std(ddof=0)
+            ax.bar(pos, mean, width=width, color=NOISE_COLORS[condition],
+                   hatch={"ideal": "", "medium": "xx"}[condition], edgecolor=SURFACE, linewidth=0.6,
+                   yerr=std, capsize=3, error_kw={"ecolor": INK2, "lw": 1}, zorder=3)
+            _seed_dots(ax, pos, sub["accuracy"], INK2)
+            ax.annotate(f"{mean:.2f}", (pos, mean + std), textcoords="offset points",
+                        xytext=(0, 4), ha="center", fontsize=8)
+            pos += width + 0.04
+        ticks.append((start + pos - width - 0.04) / 2)
+        tick_labels.append(_AN_VQC_METHOD_LABELS[method])
+        pos += group_gap
+
+    cl = _classical_means(an_vqc_classical)
+    by_mean: dict[float, list[str]] = {}
+    for model, (mean, _, _) in cl.items():
+        by_mean.setdefault(round(mean, 4), []).append(model.replace("_", " "))
+    right_edge = pos - group_gap
+    for row, (mean, names) in enumerate(by_mean.items()):
+        ax.axhline(mean, color=NEUTRAL, lw=1, ls=":")
+        ax.annotate(f"{' / '.join(names)} ({mean:.2f})", (right_edge, mean), xytext=(12, 10 - row * 12),
+                    textcoords="offset points", ha="left", fontsize=7.5, color=INK2)
+    ax.set_xlim(-0.5, right_edge + 1.3)
+
+    ax.set_xticks(ticks, tick_labels)
+    ax.set_ylim(0, 1.2)
     ax.set_ylabel("Test accuracy")
-    ax.set_title("Standard VQC vs adaptive noise-aware VQC")
-    _footnote(fig, source, _n_seeds(adaptive))
+    ax.set_title("Standard VQC baselines vs AN-VQC (and Logistic Regression / SVM)")
+    ax.legend(
+        handles=[Patch(facecolor=NOISE_COLORS["ideal"], edgecolor=SURFACE, label="ideal"),
+                 Patch(facecolor=NOISE_COLORS["medium"], hatch="xx", edgecolor=SURFACE, label="medium")],
+        loc="lower right",
+    )
+    _footnote(fig, source, _n_seeds(an_vqc),
+              "AN-VQC's architecture (qubits, depth) can differ per seed; see report/report.md Section 9.4.")
     fig.tight_layout(rect=(0, 0.04, 1, 1))
     return _save(fig, out_dir / "07_standard_vs_adaptive.png")
 
@@ -641,10 +696,22 @@ def generate_all_plots(
     noise_sweep_file: Path = NOISE_SWEEP_FILE,
     bc_results_file: Path = BC_RESULTS_FILE,
     bc_classical_file: Path = BC_CLASSICAL_FILE,
-    adaptive_file: Path = ADAPTIVE_RESULTS_FILE,
-    extension_seeds: list[int] | None = None,
+    an_vqc_results_file: Path = AN_VQC_RESULTS_FILE,
+    an_vqc_classical_file: Path = AN_VQC_CLASSICAL_FILE,
+    noise_sweep_seeds: list[int] | None = None,
+    breast_cancer_seeds: list[int] | None = None,
 ) -> PlotReport:
-    """Draw every plot the saved results support; report what was skipped and why."""
+    """Draw every plot the saved results support; report what was skipped and why.
+
+    ``noise_sweep_seeds``/``breast_cancer_seeds`` are the seeds each
+    extension's completeness check requires (default: all of
+    ``config.RANDOM_SEEDS``, i.e. 5) -- set independently because the two
+    extensions can finish with different seed counts (e.g. a 3-seed noise
+    sweep alongside a 5-seed Breast Cancer run). This only affects the
+    completeness check; the plot itself always aggregates every seed
+    actually present in the result file, and the footnote's ``n = ...``
+    reports that real count, not this parameter.
+    """
     out_dir = Path(out_dir)
     main = _completed(_frame(vqc_results_file))
     classical = _frame(classical_results_file)
@@ -658,12 +725,13 @@ def generate_all_plots(
         "04_qubits_vs_performance": lambda: plot_qubits_vs_performance(main, out_dir, vqc_results_file.name),
         "05_output_distributions": lambda: plot_output_distributions(main, out_dir, vqc_results_file.name),
         "06_classical_vs_qml": lambda: plot_classical_vs_qml(main, classical, out_dir, vqc_results_file.name),
-        "07_standard_vs_adaptive": lambda: plot_standard_vs_adaptive(_frame(adaptive_file), out_dir, adaptive_file.name),
+        "07_standard_vs_adaptive": lambda: plot_standard_vs_adaptive(
+            _frame(an_vqc_results_file), _frame(an_vqc_classical_file), out_dir, an_vqc_results_file.name),
         "08_accuracy_mean_std": lambda: plot_accuracy_mean_std(main, classical, out_dir, vqc_results_file.name),
         "extension_noise_sweep": lambda: plot_extension_noise_sweep(
-            _frame(noise_sweep_file), out_dir, noise_sweep_file.name, seeds=extension_seeds),
+            _frame(noise_sweep_file), out_dir, noise_sweep_file.name, seeds=noise_sweep_seeds),
         "extension_breast_cancer": lambda: plot_extension_breast_cancer(
-            _frame(bc_results_file), _frame(bc_classical_file), out_dir, bc_results_file.name, seeds=extension_seeds),
+            _frame(bc_results_file), _frame(bc_classical_file), out_dir, bc_results_file.name, seeds=breast_cancer_seeds),
     }
     for name, job in jobs.items():
         try:
@@ -677,8 +745,22 @@ def generate_all_plots(
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Regenerate all plots from saved results.")
     parser.add_argument("--out-dir", type=Path, default=PLOTS_DIR)
+    parser.add_argument(
+        "--noise-sweep-seeds", type=str, default=None,
+        help="Comma-separated seeds the noise-sweep completeness check requires, e.g. '0,1,2'. "
+        "Default: all of config.RANDOM_SEEDS.",
+    )
+    parser.add_argument(
+        "--breast-cancer-seeds", type=str, default=None,
+        help="Comma-separated seeds the Breast Cancer completeness check requires, e.g. '0,1,2,3,4'. "
+        "Default: all of config.RANDOM_SEEDS.",
+    )
     args = parser.parse_args(argv)
-    report = generate_all_plots(args.out_dir)
+    noise_sweep_seeds = [int(s) for s in args.noise_sweep_seeds.split(",")] if args.noise_sweep_seeds else None
+    breast_cancer_seeds = [int(s) for s in args.breast_cancer_seeds.split(",")] if args.breast_cancer_seeds else None
+    report = generate_all_plots(
+        args.out_dir, noise_sweep_seeds=noise_sweep_seeds, breast_cancer_seeds=breast_cancer_seeds
+    )
     print(f"\nGenerated {len(report.generated)} plot(s):")
     for p in report.generated:
         print(f"  {p}")
