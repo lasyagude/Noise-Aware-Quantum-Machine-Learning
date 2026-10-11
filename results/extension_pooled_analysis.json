@@ -1,0 +1,136 @@
+{
+  "source_results_file": "L:\\Quntum computing\\qml-noise-project\\results\\vqc_experiment_results.jsonl",
+  "n_source_records": 40,
+  "pooled_accuracy_per_experiment": {
+    "E1": {
+      "pooled_accuracy": 0.92,
+      "n_seeds": 5,
+      "n_total_predictions": 100,
+      "n_correct_predictions": 92
+    },
+    "E2": {
+      "pooled_accuracy": 1.0,
+      "n_seeds": 5,
+      "n_total_predictions": 100,
+      "n_correct_predictions": 100
+    },
+    "E3": {
+      "pooled_accuracy": 0.86,
+      "n_seeds": 5,
+      "n_total_predictions": 100,
+      "n_correct_predictions": 86
+    },
+    "E4": {
+      "pooled_accuracy": 0.96,
+      "n_seeds": 5,
+      "n_total_predictions": 100,
+      "n_correct_predictions": 96
+    },
+    "E7": {
+      "pooled_accuracy": 0.88,
+      "n_seeds": 5,
+      "n_total_predictions": 100,
+      "n_correct_predictions": 88
+    },
+    "E5": {
+      "pooled_accuracy": 0.96,
+      "n_seeds": 5,
+      "n_total_predictions": 100,
+      "n_correct_predictions": 96
+    },
+    "E6": {
+      "pooled_accuracy": 0.95,
+      "n_seeds": 5,
+      "n_total_predictions": 100,
+      "n_correct_predictions": 95
+    },
+    "E8": {
+      "pooled_accuracy": 0.91,
+      "n_seeds": 5,
+      "n_total_predictions": 100,
+      "n_correct_predictions": 91
+    }
+  },
+  "paired_degradation": {
+    "E5": {
+      "seeds": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "degradation_pp": [
+        0.0,
+        0.0,
+        0.0,
+        5.000000000000004,
+        -5.000000000000004
+      ],
+      "mean": 0.0,
+      "std": 3.162277660168382
+    },
+    "E6": {
+      "seeds": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "degradation_pp": [
+        0.0,
+        0.0,
+        0.0,
+        5.000000000000004,
+        0.0
+      ],
+      "mean": 1.0000000000000009,
+      "std": 2.0000000000000018
+    },
+    "E8": {
+      "seeds": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "degradation_pp": [
+        0.0,
+        0.0,
+        -4.999999999999993,
+        -5.000000000000004,
+        -5.000000000000004
+      ],
+      "mean": -3.0000000000000004,
+      "std": 2.4494897427831783
+    }
+  },
+  "bootstrap_ci_degradation_pp": {
+    "E5": {
+      "mean_degradation_pp": 0.0,
+      "ci95_low": -3.0000000000000027,
+      "ci95_high": 3.0000000000000027,
+      "n_bootstrap": 10000,
+      "bootstrap_seed": 0,
+      "n_seeds": 5
+    },
+    "E6": {
+      "mean_degradation_pp": 1.0000000000000009,
+      "ci95_low": 0.0,
+      "ci95_high": 3.0000000000000027,
+      "n_bootstrap": 10000,
+      "bootstrap_seed": 0,
+      "n_seeds": 5
+    },
+    "E8": {
+      "mean_degradation_pp": -3.0,
+      "ci95_low": -5.000000000000002,
+      "ci95_high": -0.9999999999999986,
+      "n_bootstrap": 10000,
+      "bootstrap_seed": 0,
+      "n_seeds": 5
+    }
+  }
+}
