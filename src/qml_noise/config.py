@@ -4,10 +4,16 @@ All paths, seeds, and shared experimental constants that other modules
 depend on live here so that they stay consistent across the dataset,
 classical-baseline, quantum, noise, training, and reporting modules.
 
-Quantum-circuit-specific settings (qubit counts, ansatz depths, noise
-channel parameters, the experiment matrix) are intentionally NOT defined
-here yet -- they belong to later modules (circuits/noise/experiments)
-and will be added alongside those modules.
+A note on which values are *mandatory* vs. *chosen*:
+
+- Mandatory (fixed by the assignment): ``SHOTS = 1024``,
+  ``REQUIRED_QUBIT_COUNTS = (2, 4, 6)``, ``REQUIRED_DEPTHS = (2, 4)``,
+  ``NOISE_CONDITIONS = ("ideal", "low", "medium")``, the 80:20 split, and
+  the five random seeds.
+- Chosen defaults (NOT specified by the assignment, documented and
+  configurable here): every numerical noise probability in
+  ``NOISE_PROFILES`` and ``ISOLATED_CHANNEL_PROBABILITIES``, the basis-gate
+  set, which gates carry noise, and all VQC training hyperparameters.
 """
 
 from __future__ import annotations
@@ -67,6 +73,122 @@ class ClassicalBaselineConfig:
 
 
 CLASSICAL_CONFIG: ClassicalBaselineConfig = ClassicalBaselineConfig()
+
+# ---------------------------------------------------------------------------
+# Quantum experimental parameters (assignment section 6)
+# ---------------------------------------------------------------------------
+
+# Mandatory required configurations.
+REQUIRED_QUBIT_COUNTS: tuple[int, ...] = (2, 4, 6)
+REQUIRED_DEPTHS: tuple[int, ...] = (2, 4)
+NOISE_CONDITIONS: tuple[str, ...] = ("ideal", "low", "medium")
+
+# Optional extensions (supported but not prioritized).
+OPTIONAL_QUBIT_COUNTS: tuple[int, ...] = (2, 4, 6, 8)
+OPTIONAL_DEPTHS: tuple[int, ...] = (2, 4, 6)
+
+# ---------------------------------------------------------------------------
+# Transpilation / basis gates (chosen defaults)
+# ---------------------------------------------------------------------------
+
+# IBM-like basis set. Circuits are transpiled into these gates so that the
+# Aer noise model attaches to concrete hardware-level instructions.
+BASIS_GATES: tuple[str, ...] = ("rz", "sx", "x", "cx")
+
+# Gates that carry noise. `rz` is deliberately EXCLUDED: on superconducting
+# hardware it is a virtual frame change (implemented by shifting the phase of
+# subsequent pulses) and is therefore error-free. Including it would
+# overstate single-qubit noise.
+NOISY_SINGLE_QUBIT_GATES: tuple[str, ...] = ("sx", "x")
+NOISY_TWO_QUBIT_GATES: tuple[str, ...] = ("cx",)
+
+TRANSPILE_OPTIMIZATION_LEVEL: int = 1
+
+# ---------------------------------------------------------------------------
+# Noise profiles (chosen defaults -- NOT mandated by the assignment)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class NoiseProfile:
+    """A combined noise profile applied to a whole circuit.
+
+    Probabilities are depolarizing-channel parameters for single- and
+    two-qubit gates, plus a symmetric readout (measurement) error.
+    """
+
+    name: str
+    single_qubit_depolarizing: float
+    two_qubit_depolarizing: float
+    readout_error: float
+    description: str
+
+    @property
+    def is_ideal(self) -> bool:
+        return (
+            self.single_qubit_depolarizing == 0.0
+            and self.two_qubit_depolarizing == 0.0
+            and self.readout_error == 0.0
+        )
+
+
+NOISE_PROFILES: dict[str, NoiseProfile] = {
+    "ideal": NoiseProfile(
+        name="ideal",
+        single_qubit_depolarizing=0.0,
+        two_qubit_depolarizing=0.0,
+        readout_error=0.0,
+        description="Noiseless reference simulation (no noise model attached).",
+    ),
+    "low": NoiseProfile(
+        name="low",
+        single_qubit_depolarizing=0.001,
+        two_qubit_depolarizing=0.01,
+        readout_error=0.01,
+        description=(
+            "Chosen default approximating a good current superconducting "
+            "device: 0.1% single-qubit, 1% two-qubit, 1% readout error."
+        ),
+    ),
+    "medium": NoiseProfile(
+        name="medium",
+        single_qubit_depolarizing=0.005,
+        two_qubit_depolarizing=0.05,
+        readout_error=0.03,
+        description=(
+            "Chosen default roughly 5x worse than 'low', to make degradation "
+            "clearly measurable: 0.5% single-qubit, 5% two-qubit, 3% readout."
+        ),
+    ),
+}
+
+# Probabilities used for the isolated single-channel sweeps (bit-flip,
+# phase-flip, depolarizing run one channel at a time). Chosen defaults.
+ISOLATED_CHANNEL_PROBABILITIES: tuple[float, ...] = (0.01, 0.02, 0.05, 0.10)
+
+# ---------------------------------------------------------------------------
+# VQC training defaults (chosen defaults)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class VQCConfig:
+    """Hyperparameters for the variational quantum classifier."""
+
+    # "parity" = parity of all measured qubits; "single" = qubit 0 only.
+    readout_strategy: str = "parity"
+    optimizer: str = "COBYLA"
+    maxiter: int = 150
+    tol: float = 1e-4
+    shots: int = SHOTS
+    # Initial weights are drawn uniformly from [-init_scale, +init_scale].
+    init_scale: float = 0.1
+    # Feature scaling applied before angle encoding, so that standardized
+    # features land in a sensible rotation range rather than wrapping.
+    encoding_scale: float = 1.0
+
+
+VQC_CONFIG: VQCConfig = VQCConfig()
 
 
 # ---------------------------------------------------------------------------
