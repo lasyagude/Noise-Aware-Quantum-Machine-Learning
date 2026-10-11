@@ -48,7 +48,10 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 
-from qml_noise.circuits import build_vqc_circuit  # noqa: E402
+from qiskit import QuantumCircuit  # noqa: E402
+from qiskit.circuit import ParameterVector  # noqa: E402
+
+from qml_noise.circuits import build_feature_map  # noqa: E402
 from qml_noise.config import (  # noqa: E402
     NOISE_SWEEP_TWO_QUBIT_PROBABILITIES,
     PLOTS_DIR,
@@ -196,15 +199,63 @@ def _classical_means(classical: pd.DataFrame) -> dict[str, tuple[float, float, i
 # ---------------------------------------------------------------------------
 
 
+def _draw_only_circuit(n_qubits: int, depth: int) -> QuantumCircuit:
+    """A circuit for DIAGRAMS ONLY -- gate-by-gate identical to
+    ``circuits.build_vqc_circuit`` (same encoding, same per-block RY/RZ/CNOT-ring
+    structure, same parameter count and indexing), with one addition: a
+    ``barrier()`` after the encoding and after every ansatz block.
+
+    Qiskit's mpl drawer packs each wire's gates as early as that wire's own
+    dependencies allow (ASAP scheduling), not in program-append order. Without
+    a barrier, a qubit whose ring-CNOT finishes early can have the *next*
+    block's RY drawn before another qubit's *current* block has finished --
+    visually interleaving two blocks even though the actual circuit (and its
+    simulation) is correct. Barriers force every wire to re-synchronize at the
+    block boundary so each block renders as its own column group. This
+    function is never used for simulation, training, or any saved metric --
+    only ``build_vqc_circuit`` is -- so it cannot affect any result in
+    ``results/``.
+    """
+    feature_map, _ = build_feature_map(n_qubits)
+    weights = ParameterVector("w", 2 * n_qubits * depth)
+    qc = QuantumCircuit(n_qubits, name=f"vqc_q{n_qubits}_d{depth}_diagram")
+    qc.compose(feature_map, inplace=True)
+    qc.barrier()
+    k = 0
+    for block in range(depth):
+        for i in range(n_qubits):
+            qc.ry(weights[k], i)
+            k += 1
+        for i in range(n_qubits):
+            qc.rz(weights[k], i)
+            k += 1
+        for i in range(n_qubits):
+            qc.cx(i, (i + 1) % n_qubits)
+        if block < depth - 1:
+            qc.barrier()  # last block's boundary is already marked by measure_all()'s own barrier
+    qc.measure_all()
+    return qc
+
+
 def plot_circuit_diagram(
     out_dir: Path = PLOTS_DIR, *, n_qubits: int = 4, depth: int = 2
 ) -> Path:
-    """Qiskit ``draw("mpl")`` of the logical VQC circuit (no simulation involved)."""
-    qc, _, _ = build_vqc_circuit(n_qubits, depth)
-    fig = qc.draw("mpl", fold=-1, style={"backgroundcolor": SURFACE}, plot_barriers=True)
+    """Qiskit ``draw("mpl")`` of the logical (un-transpiled) VQC circuit.
+
+    No circuit is simulated or trained here. Uses a diagram-only circuit
+    (see ``_draw_only_circuit``) with block-separating barriers purely so
+    the rendering doesn't visually interleave blocks; the underlying gate
+    sequence is identical to the real training circuit.
+    """
+    qc = _draw_only_circuit(n_qubits, depth)
+    fig = qc.draw(
+        "mpl", fold=-1, style={"backgroundcolor": SURFACE}, plot_barriers=True
+    )
+    fig.set_size_inches(fig.get_size_inches()[0] * 1.15, fig.get_size_inches()[1])
     fig.suptitle(
         f"VQC circuit: {n_qubits} qubits, logical depth {depth} "
-        f"(angle encoding H+RY(x), then {depth} x [RY, RZ, CNOT ring], measure all)",
+        f"(angle encoding H+RY(x), then {depth} x [RY, RZ, CNOT ring], measure all; "
+        f"barriers mark block boundaries for readability only)",
         fontsize=10,
         y=1.02,
     )
@@ -225,7 +276,18 @@ def plot_degradation_vs_noise(main: pd.DataFrame, out_dir: Path, source: str) ->
         ("degradation_pp", "Accuracy degradation (percentage points)\n(negative = noisy model scored higher)"),
         ("distribution_total_variation_distance", "Output-distribution TVD vs ideal"),
     ]
+    # Per-series label offset: both series can land on the exact same value
+    # (e.g. both are 0 at "ideal" by construction), so a single fixed offset
+    # stacks their text labels exactly on top of each other. The degradation
+    # panel has headroom on both sides of 0, so mirroring one series above
+    # and one below its marker keeps them apart. The TVD panel's floor is 0
+    # (no negative values) -- a downward offset there collides with the
+    # x-axis tick labels instead, so both series go upward there, staggered
+    # at different heights so they still don't stack on each other.
+    mirrored_offset = {4: (12, 8), 6: (12, -17)}
+    stacked_offset = {4: (10, 19), 6: (10, 5)}
     for ax, (col, ylabel) in zip(axes, panels):
+        label_offset = mirrored_offset if col == "degradation_pp" else stacked_offset
         st = _stats(main, col)
         for q, ids in groups:
             xs = [NOISE_ORDER.index(_META[i][2]) for i in ids]
@@ -239,7 +301,8 @@ def plot_degradation_vs_noise(main: pd.DataFrame, out_dir: Path, source: str) ->
             for x, i in zip(xs, ids):
                 _seed_dots(ax, x, main.loc[main.experiment_id == i, col], ARCH_COLORS[q], ARCH_MARKERS[q])
                 ax.annotate(f"{st.loc[i, 'mean']:.3g}", (x, st.loc[i, "mean"]), textcoords="offset points",
-                            xytext=(11, 7), fontsize=8, color=INK2)
+                            xytext=label_offset[q], fontsize=8, color=INK2,
+                            va="bottom" if label_offset[q][1] > 0 else "top")
         ax.set_xticks(range(len(NOISE_ORDER)), NOISE_ORDER)
         ax.set_xlabel("Noise condition")
         ax.set_ylabel(ylabel)
@@ -513,7 +576,7 @@ def plot_standard_vs_adaptive(
         raise PlotSkipped("standard vs adaptive VQC: results/an_vqc_classical_results.jsonl not found / empty")
 
     _style()
-    fig, ax = plt.subplots(figsize=(10, 4.8))
+    fig, ax = plt.subplots(figsize=(11.5, 4.8))
     width, group_gap = 0.34, 0.5
     pos = 0.0
     ticks, tick_labels = [], []
@@ -533,28 +596,38 @@ def plot_standard_vs_adaptive(
         tick_labels.append(_AN_VQC_METHOD_LABELS[method])
         pos += group_gap
 
-    cl = _classical_means(an_vqc_classical)
-    by_mean: dict[float, list[str]] = {}
-    for model, (mean, _, _) in cl.items():
-        by_mean.setdefault(round(mean, 4), []).append(model.replace("_", " "))
-    right_edge = pos - group_gap
-    for row, (mean, names) in enumerate(by_mean.items()):
-        ax.axhline(mean, color=NEUTRAL, lw=1, ls=":")
-        ax.annotate(f"{' / '.join(names)} ({mean:.2f})", (right_edge, mean), xytext=(12, 10 - row * 12),
-                    textcoords="offset points", ha="left", fontsize=7.5, color=INK2)
-    ax.set_xlim(-0.5, right_edge + 1.3)
+    # Classical baselines: real bars (one each, no noise axis), not a reference
+    # line -- a dotted line at the top of the chart reads as an unexplained
+    # ceiling rather than a directly comparable data point.
+    cl_means = _classical_means(an_vqc_classical)
+    for model_name in ("logistic_regression", "svm"):
+        if model_name not in cl_means:
+            continue
+        mean, std, _ = cl_means[model_name]
+        sub = an_vqc_classical[an_vqc_classical.model_name == model_name]["accuracy"]
+        ax.bar(pos, mean, width=width * 1.7, color=NEUTRAL, hatch="//", edgecolor=SURFACE,
+               linewidth=0.6, yerr=std, capsize=3, error_kw={"ecolor": INK2, "lw": 1}, zorder=3)
+        _seed_dots(ax, pos, sub, INK2)
+        ax.annotate(f"{mean:.2f}", (pos, mean + std), textcoords="offset points",
+                    xytext=(0, 4), ha="center", fontsize=8)
+        ticks.append(pos)
+        tick_labels.append(model_name.replace("_", " ").replace(" ", "\n"))
+        pos += width * 1.7 + group_gap
 
+    ax.set_xlim(-0.5, pos - group_gap + 0.5)
     ax.set_xticks(ticks, tick_labels)
     ax.set_ylim(0, 1.2)
     ax.set_ylabel("Test accuracy")
-    ax.set_title("Standard VQC baselines vs AN-VQC (and Logistic Regression / SVM)")
+    ax.set_title("Standard VQC baselines vs AN-VQC, and classical baselines")
     ax.legend(
         handles=[Patch(facecolor=NOISE_COLORS["ideal"], edgecolor=SURFACE, label="ideal"),
-                 Patch(facecolor=NOISE_COLORS["medium"], hatch="xx", edgecolor=SURFACE, label="medium")],
+                 Patch(facecolor=NOISE_COLORS["medium"], hatch="xx", edgecolor=SURFACE, label="medium"),
+                 Patch(facecolor=NEUTRAL, hatch="//", edgecolor=SURFACE, label="classical (no noise axis)")],
         loc="lower right",
     )
     _footnote(fig, source, _n_seeds(an_vqc),
-              "AN-VQC's architecture (qubits, depth) can differ per seed; see report/report.md Section 9.4.")
+              "AN-VQC's architecture (qubits, depth) can differ per seed; see report/report.md Section 9.4. "
+              "Classical bars use results/an_vqc_classical_results.jsonl (same 3 seeds).")
     fig.tight_layout(rect=(0, 0.04, 1, 1))
     return _save(fig, out_dir / "07_standard_vs_adaptive.png")
 
@@ -631,7 +704,9 @@ def plot_extension_noise_sweep(
             ax.axhline(0, color=NEUTRAL, lw=1, ls="--")
     axes[0].legend(loc="lower left")
     fig.suptitle("EXTENSION - depolarizing noise sweep (evaluation only; weights trained ideally)", fontsize=12)
-    _footnote(fig, source, _n_seeds(sweep), "Noise probabilities are chosen defaults, not assignment values.")
+    _footnote(fig, source, _n_seeds(sweep),
+              "Noise probabilities are this extension's own chosen defaults, not assignment-specified "
+              "values (unlike Section 6's low/medium profiles).")
     fig.tight_layout(rect=(0, 0.04, 1, 0.95))
     return _save(fig, out_dir / "extension_noise_sweep.png")
 
@@ -656,11 +731,31 @@ def plot_extension_breast_cancer(
         _seed_dots(ax, x, bc.loc[bc.experiment_id == i, "accuracy"], NOISE_COLORS[noise], ARCH_MARKERS[q])
         ax.annotate(f"{st.loc[i, 'mean']:.2f}", (x, st.loc[i, "mean"]), textcoords="offset points",
                     xytext=(10, -4), fontsize=8, color=INK2)
-    for model, (mean, _, _) in cl.items():
+    # Classical models' means can be only a few hundredths apart (LogReg vs.
+    # SVM here), which on this axis range puts their labels a few pixels
+    # apart -- a fixed offset makes them overlap into illegible text. Stagger
+    # each label's vertical offset by its row index so they never collide,
+    # regardless of how close the underlying means are.
+    for row, (model, (mean, _, _)) in enumerate(cl.items()):
         ax.axhline(mean, color=NEUTRAL, lw=1, ls=":")
-        ax.annotate(f"{model.replace('_', ' ')} ({mean:.2f})", (len(ids) - 0.5, mean), xytext=(0, 3),
-                    textcoords="offset points", ha="right", fontsize=7.5, color=INK2)
+        ax.annotate(f"{model.replace('_', ' ')} ({mean:.2f})", (len(ids) - 0.5, mean),
+                    xytext=(0, 3 + row * 20), textcoords="offset points",
+                    ha="right", fontsize=7.5, color=INK2, annotation_clip=False)
     ax.set_xticks(range(len(ids)), [f"{i}\n{_META[i[3:]][0]}q d{_META[i[3:]][1]}\n{_META[i[3:]][2]}" for i in ids])
+    # The classical labels anchor at x = len(ids) - 0.5 = 7.5, past the last
+    # data point (x=7) -- autoscale's default margin stops at ~7.43, so that
+    # anchor sits just OUTSIDE the axes and matplotlib drops the whole
+    # annotation (not just overlaps it: it never renders at all). Extend the
+    # right edge explicitly so the anchor -- and the text extending left from
+    # it -- are fully inside the visible area.
+    ax.set_xlim(-0.6, len(ids) - 0.1)
+    # Without explicit headroom, autoscale caps the axis right at the highest
+    # classical mean, clipping its label (and the second, stacked label
+    # above it) off the top of the chart entirely -- not just overlapping,
+    # invisible. Leave room above the highest classical mean for both
+    # staggered labels.
+    highest_classical_mean = max(mean for mean, _, _ in cl.values())
+    ax.set_ylim(top=highest_classical_mean + 0.09)
     ax.set_ylabel("Test accuracy (full held-out test set)")
     ax.set_title("Accuracy per experiment")
     noisy = [i for i in ids if _META[i[3:]][2] != "ideal"]
