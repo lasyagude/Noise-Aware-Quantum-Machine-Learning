@@ -26,8 +26,8 @@ Python 3.14 with `qiskit 2.5.2`, `qiskit-aer 0.17.2`,
 ## Tests
 
 ```powershell
-pytest          # 244 passed (last verified run: 2026-10-11, ~15.6 min wall time -- training
-                # tests make a full run take several minutes)
+pytest          # 244 tests collected, 244 passed, 0 failed (last verified run: 2026-10-11,
+                # 937s / ~15.6 min wall time -- training tests make a full run take several minutes)
 ```
 
 ## Project structure
