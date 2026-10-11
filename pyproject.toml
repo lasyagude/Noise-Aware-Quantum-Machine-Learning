@@ -7,3 +7,8 @@ requires-python = ">=3.10"
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+filterwarnings = [
+    # Tests intentionally pass tiny COBYLA iteration budgets to stay fast;
+    # SciPy's floor of n_params + 2 kicking in is expected, not a bug.
+    "ignore:.*Invalid MAXFUN.*:UserWarning",
+]

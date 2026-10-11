@@ -1,0 +1,2 @@
+{"model_name": "logistic_regression", "dataset_name": "iris", "seed": 0, "accuracy": 1.0, "precision": 1.0, "recall": 1.0, "f1": 1.0, "confusion_matrix": [[10, 0], [0, 10]], "training_time_seconds": 0.0029055001214146614}
+{"model_name": "svm", "dataset_name": "iris", "seed": 0, "accuracy": 1.0, "precision": 1.0, "recall": 1.0, "f1": 1.0, "confusion_matrix": [[10, 0], [0, 10]], "training_time_seconds": 0.0009327000007033348}
