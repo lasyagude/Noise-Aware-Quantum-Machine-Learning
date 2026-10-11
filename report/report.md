@@ -100,10 +100,10 @@ limited to what their abstracts report. Full texts were not read.
   against adversarial perturbations that improves as noise grows. This is a different setting
   (adversarial robustness), but it shows noise is not uniformly harmful, which is relevant to our
   E8 observation.
-- **Noise-adaptive circuit selection.** QuantumNAS (H. Wang et al., 2021, arXiv preprint; a
-  different Wang et al. 2021 from the barren-plateaus paper above) searches for
-  circuits and qubit mappings using device noise models and reports gains over noise-unaware
-  search baselines. It is the closest published idea to our proposed AN-VQC.
+- **Noise-adaptive circuit selection.** QuantumNAS (H. Wang et al., 2022; a different Wang et al.
+  from the S. Wang barren-plateaus paper above) searches for circuits and qubit mappings using
+  device noise models and reports gains over noise-unaware search baselines. It is the closest
+  published idea to our proposed AN-VQC.
 
 **Gap addressed (modestly).** We do not claim novelty for noise-aware circuit search. This project
 provides a small, fully reproducible, controlled study on a standard benchmark: the same trained
@@ -345,10 +345,8 @@ comfortably cover the apparent movement — e.g. 6-qubit accuracy goes 0.880 →
 0.870 → 0.860 as noise increases, which reads as noise around a flat line, not a slope. TVD is the
 opposite: clean and monotonic at both architectures across every one of the 6 levels (4q:
 0.000 → 0.146; 6q: 0.000 → 0.248), with standard deviations that stay a small fraction of the mean
-at the higher levels. This is the same conclusion the 3-seed version of this sweep reached, now on
-roughly twice the data and with tighter, more trustworthy error bars: confirming RQ3 on a second,
-independent noise axis — distribution distance tracks injected noise strength cleanly where accuracy
-does not.
+at the higher levels. Confirming RQ3 on a second, independent noise axis — distribution distance
+tracks injected noise strength cleanly where accuracy does not.
 
 #### 9.3.2 Breast Cancer Wisconsin (5 seeds)
 
@@ -576,7 +574,7 @@ NormalizedCost is min-max normalized total gate count across the six candidates 
 quantity needing no training. The selected architecture, the best-by-ideal-validation-accuracy
 architecture, a fixed 4-qubit/depth-4 baseline, and a shallow 2-qubit/depth-2 baseline are each
 (re)trained on the full training set and compared on the real test set against Logistic Regression
-and SVM. Related idea in the literature: QuantumNAS (H. Wang et al., 2021).
+and SVM. Related idea in the literature: QuantumNAS (H. Wang et al., 2022).
 
 **Result, stated honestly (full numbers in Section 9.4): AN-VQC did not improve on the simpler
 ideal-validation-best baseline, and did not even win under its own objective when that objective
@@ -643,9 +641,11 @@ search results; full texts were not read, and descriptions above are limited to 
    *Quantum Machine Intelligence* 3. https://doi.org/10.1007/s42484-021-00038-w ·
    https://arxiv.org/abs/2003.09887
 6. Du, Y., Hsieh, M.-H., Liu, T., Tao, D., Liu, N. (2021). Quantum noise protects quantum classifiers against
-   adversaries. *Physical Review Research* 3, 023153. https://arxiv.org/abs/2003.09416
-7. Wang, H., Ding, Y., Gu, J., Lin, Y., Pan, D. Z., Chong, F. T., Han, S. (2021). QuantumNAS: Noise-Adaptive
-   Search for Robust Quantum Circuits. arXiv:2107.10845. https://arxiv.org/abs/2107.10845
+   adversaries. *Physical Review Research* 3, 023153. https://doi.org/10.1103/PhysRevResearch.3.023153 ·
+   https://arxiv.org/abs/2003.09416
+7. Wang, H. et al. (2022). QuantumNAS: Noise-Adaptive Search for Robust Quantum Circuits. In *2022 IEEE
+   International Symposium on High-Performance Computer Architecture (HPCA)*, pp. 692–708.
+   https://doi.org/10.1109/HPCA53966.2022.00057 · arXiv:2107.10845. https://arxiv.org/abs/2107.10845
 8. Javadi-Abhari, A. et al. (2024). Quantum computing with Qiskit. arXiv:2405.08810.
    https://arxiv.org/abs/2405.08810
 9. Pedregosa, F. et al. (2011). Scikit-learn: Machine Learning in Python. *Journal of Machine Learning Research*
