@@ -2,7 +2,7 @@
 
 **Status: complete.** Every section uses only saved results: the mandatory E1–E8 matrix
 (`results/vqc_experiment_results.jsonl`, 40 rows, regenerated under the corrected noise levels), the
-noise-sweep extension (`results/extension_noise_sweep.jsonl`, 36 rows, 3 seeds), the Breast Cancer
+noise-sweep extension (`results/extension_noise_sweep.jsonl`, 60 rows, 5 seeds), the Breast Cancer
 extension (`results/extension_breast_cancer_results.jsonl`, 40 rows, 5 seeds), the pooled analysis
 (`results/extension_pooled_analysis.json`), and the AN-VQC comparison (`results/an_vqc_results.jsonl`,
 `results/an_vqc_selection_log.jsonl`, `results/an_vqc_classical_results.jsonl`, 3 seeds each). No
@@ -35,9 +35,10 @@ distance (total variation distance, TVD) was a far clearer signal, rising from 0
 (medium) at 4 qubits and reaching 0.209 at 6 qubits under medium noise. Logistic regression and an
 RBF SVM both reached 1.00 accuracy, so no advantage of the quantum classifier is claimed on Iris.
 
-Two extensions were also run. A depolarizing-probability sweep (3 seeds, 4- and 6-qubit depth-4
-circuits, two-qubit probability 0–5%) found accuracy essentially flat while TVD rose monotonically
-to 0.165–0.276 at the highest level swept, reinforcing that distribution distance is the more
+Two extensions were also run. A depolarizing-probability sweep (5 seeds, 4- and 6-qubit depth-4
+circuits, two-qubit probability 0–5%) found accuracy staying within 1–2 pp of baseline at every
+level (no clear trend, well inside this study's seed-to-seed noise) while TVD rose monotonically
+to 0.146–0.248 at the highest level swept, reinforcing that distribution distance is the more
 sensitive instrument. Rerunning the full matrix shape on Breast Cancer Wisconsin (5 seeds, PCA
 feature reduction, 100-sample training subsample, full ~114-sample test set) gave a materially
 different and more honest picture: the VQC reached only 0.54–0.64 accuracy against 0.96 (Logistic
@@ -287,39 +288,45 @@ under ideal simulation); it flattens the distribution.
 
 ### 9.3 Extension results
 
-#### 9.3.1 Depolarizing noise sweep (3 seeds)
+#### 9.3.1 Depolarizing noise sweep (5 seeds)
 
 Two-qubit depolarizing probability swept over {0, 0.001, 0.005, 0.01, 0.02, 0.05} (single-qubit
 probability = one tenth of the two-qubit value, a chosen ratio, not an assignment value); 4-qubit
 and 6-qubit depth-4 models, each trained once (ideally) per seed and re-evaluated at every level —
-the same train-once-evaluate-many pattern as the main matrix. **3 seeds (0, 1, 2)**, not 5: this
-extension was run with a smaller seed budget to keep total runtime down, and is reported as-is
-rather than padded.
+the same train-once-evaluate-many pattern as the main matrix. **5 seeds (0–4)**, the full seed
+budget, matching the main matrix and Breast Cancer.
 
-| Architecture | p₂ (2-qubit) | Mean accuracy | Mean degradation (pp) | Mean TVD vs ideal |
-|---|---:|---:|---:|---:|
-| 4q, depth 4 | 0 (ideal) | 0.983 | 0.00 | 0.000 |
-| 4q, depth 4 | 0.001 | 0.983 | 0.00 | 0.006 |
-| 4q, depth 4 | 0.005 | 0.983 | 0.00 | 0.024 |
-| 4q, depth 4 | 0.01 | 0.983 | 0.00 | 0.044 |
-| 4q, depth 4 | 0.02 | 0.983 | 0.00 | 0.081 |
-| 4q, depth 4 | 0.05 | 0.983 | 0.00 | 0.165 |
-| 6q, depth 4 | 0 (ideal) | 0.867 | 0.00 | 0.000 |
-| 6q, depth 4 | 0.001 | 0.850 | +1.67 | 0.011 |
-| 6q, depth 4 | 0.005 | 0.867 | 0.00 | 0.043 |
-| 6q, depth 4 | 0.01 | 0.867 | 0.00 | 0.080 |
-| 6q, depth 4 | 0.02 | 0.883 | −1.67 | 0.142 |
-| 6q, depth 4 | 0.05 | 0.850 | +1.67 | 0.276 |
+| Architecture | p₂ (2-qubit) | Accuracy | Degradation (pp) | Robustness | TVD vs ideal |
+|---|---:|---:|---:|---:|---:|
+| 4q, depth 4 | 0 (ideal) | 0.960 ± 0.037 | 0.00 ± 0.00 | 1.000 ± 0.000 | 0.000 ± 0.000 |
+| 4q, depth 4 | 0.001 | 0.960 ± 0.037 | 0.00 ± 0.00 | 1.000 ± 0.000 | 0.005 ± 0.001 |
+| 4q, depth 4 | 0.005 | 0.960 ± 0.058 | 0.00 ± 3.16 | 0.999 ± 0.034 | 0.021 ± 0.004 |
+| 4q, depth 4 | 0.01 | 0.960 ± 0.058 | 0.00 ± 3.16 | 0.999 ± 0.034 | 0.040 ± 0.007 |
+| 4q, depth 4 | 0.02 | 0.950 ± 0.055 | +1.00 ± 2.00 | 0.989 ± 0.022 | 0.071 ± 0.016 |
+| 4q, depth 4 | 0.05 | 0.960 ± 0.037 | 0.00 ± 0.00 | 1.000 ± 0.000 | 0.146 ± 0.032 |
+| 6q, depth 4 | 0 (ideal) | 0.880 ± 0.081 | 0.00 ± 0.00 | 1.000 ± 0.000 | 0.000 ± 0.000 |
+| 6q, depth 4 | 0.001 | 0.860 ± 0.097 | +2.00 ± 2.45 | 0.976 ± 0.030 | 0.011 ± 0.002 |
+| 6q, depth 4 | 0.005 | 0.880 ± 0.098 | 0.00 ± 3.16 | 0.999 ± 0.035 | 0.040 ± 0.007 |
+| 6q, depth 4 | 0.01 | 0.890 ± 0.092 | −1.00 ± 2.00 | 1.011 ± 0.021 | 0.073 ± 0.015 |
+| 6q, depth 4 | 0.02 | 0.870 ± 0.075 | +1.00 ± 3.74 | 0.990 ± 0.044 | 0.129 ± 0.026 |
+| 6q, depth 4 | 0.05 | 0.860 ± 0.097 | +2.00 ± 5.10 | 0.977 ± 0.063 | 0.248 ± 0.054 |
+
+Ideal-condition (p₂ = 0) accuracy here matches the main matrix's E4 (0.960 ± 0.037) and E7
+(0.880 ± 0.081) exactly — the same architecture, trained the same way, on the same seeds.
 
 ![Noise sweep](../plots/extension_noise_sweep.png)
-*Figure 9. Accuracy, degradation, and TVD across the depolarizing probability sweep (n = 3 seeds).*
+*Figure 9. Accuracy, degradation, and TVD across the depolarizing probability sweep (n = 5 seeds).*
 
-**RQ4, answered.** Over this range, accuracy at 4 qubits is completely flat (0.983 at every level,
-including p₂=0.05 — the strongest level swept) and at 6 qubits moves within ±1.67 pp with no
-monotonic trend (consistent with 3-seed, 15-sample test-set noise rather than a real effect). TVD,
-again, rises monotonically and substantially at both architectures (4q: 0→0.165; 6q: 0→0.276),
-confirming RQ3's finding on a second, independent noise axis: distribution distance tracks injected
-noise strength cleanly where accuracy does not.
+**RQ4, answered.** Over this range, accuracy at both architectures stays within 1–2 pp of its own
+baseline at every level, with no consistent monotonic trend and standard deviations (2–5 pp) that
+comfortably cover the apparent movement — e.g. 6-qubit accuracy goes 0.880 → 0.860 → 0.880 → 0.890 →
+0.870 → 0.860 as noise increases, which reads as noise around a flat line, not a slope. TVD is the
+opposite: clean and monotonic at both architectures across every one of the 6 levels (4q:
+0.000 → 0.146; 6q: 0.000 → 0.248), with standard deviations that stay a small fraction of the mean
+at the higher levels. This is the same conclusion the 3-seed version of this sweep reached, now on
+roughly twice the data and with tighter, more trustworthy error bars: confirming RQ3 on a second,
+independent noise axis — distribution distance tracks injected noise strength cleanly where accuracy
+does not.
 
 #### 9.3.2 Breast Cancer Wisconsin (5 seeds)
 
@@ -460,8 +467,8 @@ most; it is not evidence that noise improves quantum classifiers.
 **RQ3: distributions are more sensitive than accuracy.** TVD rose with noise strength in every
 comparison (0.032 → 0.118 at 4 qubits; 0.209 at 6 qubits) with small relative spread, while
 accuracy barely moved. The noise-sweep extension (Section 9.3.1) confirms this on an independent,
-finer-grained probability axis: 4-qubit accuracy was completely flat (0.983 at every level) while
-TVD rose smoothly to 0.165. Part of the 6-qubit increase may reflect the larger outcome space (64 vs
+finer-grained probability axis: 4-qubit accuracy stayed within 1 pp of baseline at every level while
+TVD rose smoothly to 0.146. Part of the 6-qubit increase may reflect the larger outcome space (64 vs
 16 bitstrings) and more noisy two-qubit gates (24 vs 16), which cannot be separated in this matrix.
 
 **Classical comparison.** Iris setosa/versicolor is linearly separable; both classical models are
@@ -500,8 +507,8 @@ differently-weighted or differently-calibrated version could do better; that was
    (`val_fraction=0.25` of an 80-sample training set) from which all six candidates' scores were
    estimated — small enough that the ideal-validation-best candidate was identical in every seed
    despite real seed-to-seed variance elsewhere, suggesting 20 validation points may not
-   discriminate candidates well at this task's difficulty. The noise-sweep extension used only 3
-   seeds (not 5), by design, to bound runtime; Breast Cancer used the full 5.
+   discriminate candidates well at this task's difficulty. The noise sweep and Breast Cancer
+   extensions both now use the full 5 seeds, matching the main matrix.
 
 ## 12. Proposed improvement: Adaptive Noise-Aware VQC (AN-VQC)
 
@@ -607,9 +614,9 @@ search results; full texts were not read, and descriptions above are limited to 
 .venv\Scripts\Activate.ps1; $env:PYTHONPATH="src"
 python -m qml_noise.experiments --mode full                 # E1-E8, 5 seeds (done)
 python -m qml_noise.extensions pooled-analysis               # extension: pooled stats (done)
-python -m qml_noise.extensions noise-sweep --mode full        # extension, 3 seeds (done)
+python -m qml_noise.extensions noise-sweep --mode full        # extension, 5 seeds (done)
 python -m qml_noise.extensions breast-cancer --mode full      # extension, 5 seeds (done)
 python -m qml_noise.an_vqc --mode full                        # AN-VQC, 3 seeds (done)
-python -m qml_noise.plotting --noise-sweep-seeds 0,1,2 --breast-cancer-seeds 0,1,2,3,4
+python -m qml_noise.plotting --noise-sweep-seeds 0,1,2,3,4 --breast-cancer-seeds 0,1,2,3,4
                                                                 # regenerate every plot the saved results support
 ```

@@ -3,12 +3,10 @@
 Noise-Aware Quantum Machine Learning: Experimental Analysis and Adaptive Circuit
 Selection for Robust Classification.
 
-> **Status:** the VQC, noise models, metrics, experiment runner, and the full
-> E1-E8 x 5-seed Iris matrix are done and saved in `results/`. Plotting code,
-> the 4-qubit circuit diagram, and a **draft report** (`report/report.md`) exist;
-> extension runs (noise sweep, Breast Cancer) were still running when the draft
-> was written, and adaptive circuit selection (AN-VQC) is **not implemented**.
-> The report marks every unfinished part with `PLACEHOLDER`. See `PROGRESS.md`.
+> **Status: complete.** The VQC, noise models, metrics, experiment runner, the full E1-E8 x 5-seed
+> Iris matrix, both extensions (noise sweep and Breast Cancer, 5 seeds each), AN-VQC (3 seeds), all
+> plots, and `report/report.md` are done. No `PLACEHOLDER` markers remain in the report. See
+> `PROGRESS.md` for details and verification notes.
 
 ## Setup
 
@@ -45,7 +43,7 @@ src/qml_noise/
 tests/            205 tests
 results/          real experiment output (JSONL/CSV/JSON); results/smoke_checks/ = pipeline checks only
 plots/            PNG figures + noise_comparison_table.csv/.md (regenerate: see below)
-report/           report.md (draft; PLACEHOLDERs mark unfinished parts)
+report/           report.md (complete, no PLACEHOLDERs remaining)
 ```
 
 ## Main experiment matrix (E1-E8)
@@ -94,16 +92,16 @@ command. Options: `--seeds 0,1`, `--maxiter N`, `--force`; Breast Cancer also
 ## Plots and report
 
 ```powershell
-python -m qml_noise.plotting     # draws every plot the saved results support
+python -m qml_noise.plotting --noise-sweep-seeds 0,1,2,3,4 --breast-cancer-seeds 0,1,2,3,4
+# draws every plot the saved results support
 ```
 
-Reads only `results/*.jsonl`; no circuit is run. Plots 1-6 and 8 and the
-circuit diagram (`plots/circuit_4q_depth2.png`, needs `pylatexenc`) are
-generated. `extension_*.png` are drawn only once the extension result files
-are **complete** (all experiment/seed pairs present); `07_standard_vs_adaptive.png`
-needs `results/adaptive_selection_results.jsonl` (provisional schema:
-`method`, `seed`, `accuracy`), which does not exist until AN-VQC is built.
-Re-run the command after the extension runs finish.
+Reads only `results/*.jsonl`; no circuit is run. All 11 plots (1-8, the circuit
+diagram, and both `extension_*.png`) are generated from the current results,
+all at 5 seeds. `07_standard_vs_adaptive.png` reads `results/an_vqc_results.jsonl`
+and `results/an_vqc_classical_results.jsonl` (3 seeds).
+`--noise-sweep-seeds`/`--breast-cancer-seeds` only affect each extension's
+completeness check; omit them to default to all of `config.RANDOM_SEEDS`.
 
 ## Quantum classifier
 
