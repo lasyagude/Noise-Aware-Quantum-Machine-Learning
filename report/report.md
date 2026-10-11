@@ -5,8 +5,8 @@
 noise-sweep extension (`results/extension_noise_sweep.jsonl`, 60 rows, 5 seeds), the Breast Cancer
 extension (`results/extension_breast_cancer_results.jsonl`, 40 rows, 5 seeds), the pooled analysis
 (`results/extension_pooled_analysis.json`), and the AN-VQC comparison (`results/an_vqc_results.jsonl`,
-`results/an_vqc_selection_log.jsonl`, `results/an_vqc_classical_results.jsonl`, 3 seeds each). No
-`PLACEHOLDER` or `STALE` markers remain.
+`results/an_vqc_selection_log.jsonl`, `results/an_vqc_classical_results.jsonl`, 3 seeds each).
+Every section below is finished and every number reflects the latest saved results.
 
 **Noise-level correction, 2026-10-11.** `config.NOISE_PROFILES["low"]` and `["medium"]` were
 corrected to match the assignment's noise-level guideline table exactly (Section 6). Every E5/E6/E8
@@ -69,7 +69,7 @@ conditions, then propose and evaluate an improvement.
 - **RQ3.** Is the output-distribution shift (TVD / Hellinger) a more sensitive indicator of noise
   than accuracy?
 - **RQ4 (extension).** How does accuracy fall as the depolarizing probability is swept? Answered in
-  Section 9.3: it essentially doesn't, within the swept range (0–5% two-qubit probability) and 3
+  Section 9.3: it essentially doesn't, within the swept range (0–5% two-qubit probability) and 5
   seeds — TVD is again the signal that moves.
 - **RQ5 (proposed method).** Does validation-based noise-aware circuit selection (AN-VQC) improve
   on a fixed circuit, the ideal-validation-best circuit, a shallow circuit, and classical
@@ -89,7 +89,7 @@ limited to what their abstracts report. Full texts were not read.
 - **Variational quantum classifiers.** Havlíček et al. (2019) ran a variational quantum classifier
   and a quantum kernel estimator on a superconducting processor, which is the design family
   studied here.
-- **Noise and trainability.** Wang et al. (2021) show that for local Pauli noise, gradients can
+- **Noise and trainability.** S. Wang et al. (2021) show that for local Pauli noise, gradients can
   shrink exponentially with qubit count when ansatz depth grows linearly with qubit number
   ("noise-induced barren plateaus"), a reason to expect deeper/wider circuits to be harder to
   train under noise.
@@ -100,7 +100,8 @@ limited to what their abstracts report. Full texts were not read.
   against adversarial perturbations that improves as noise grows. This is a different setting
   (adversarial robustness), but it shows noise is not uniformly harmful, which is relevant to our
   E8 observation.
-- **Noise-adaptive circuit selection.** QuantumNAS (Wang et al., 2021, arXiv preprint) searches for
+- **Noise-adaptive circuit selection.** QuantumNAS (H. Wang et al., 2021, arXiv preprint; a
+  different Wang et al. 2021 from the barren-plateaus paper above) searches for
   circuits and qubit mappings using device noise models and reports gains over noise-unaware
   search baselines. It is the closest published idea to our proposed AN-VQC.
 
@@ -126,6 +127,10 @@ and an explicit report of null and negative results.
   1993), 30 features, PCA to the qubit count (fit on training data only, via the same
   `FeatureAdapter` as Iris), 100-sample stratified training subset (training time, not accuracy,
   was the constraint), full ~114-sample held-out test set, 5 seeds. Results in Section 9.3.
+- **Wine (secondary, optional): implemented, not run.** A loader (`load_wine_reduced`, 13 features,
+  optional reduction) exists and is unit-tested, matching the assignment's secondary-dataset list,
+  but no experiment in this report uses it — Breast Cancer was chosen as the secondary dataset
+  instead. No Wine numbers appear anywhere in this report.
 
 ## 5. QNN architecture and circuit design
 
@@ -158,13 +163,25 @@ logical depth:
 | 4 | 4 | 41 | 112 | 16 | 32 |
 | 6 | 4 | 49 | 168 | 24 | 48 |
 
+**Implementation note.** The VQC is built directly on Qiskit and Aer primitives (the circuits above,
+plus SciPy's `COBYLA` as the classical optimizer), rather than on
+`qiskit_machine_learning.algorithms.VQC`. This gives full control over three things that matter for
+this study: the exact readout-to-class mapping (the parity strategy above), the precise shot budget
+and when it is spent, and exactly which noise model is attached to the circuit at evaluation time
+(`set_noise_model()`, used to re-evaluate the same trained weights under a different noise
+condition without retraining). Everything quantum still runs exclusively on Qiskit/Qiskit Aer.
+
 ## 6. Noise methodology
 
 Noise is implemented with Qiskit Aer noise models attached to specific *transpiled* instructions:
 single-qubit depolarizing error on `sx`/`x`, two-qubit depolarizing error on `cx`, and a symmetric
 readout error on `measure`. `rz` carries **no** error because on superconducting hardware it is a
-virtual frame change. Isolated bit-flip, phase-flip, depolarizing and readout channels are also
-implemented and unit-tested, but the mandatory matrix uses the combined profiles below.
+virtual frame change. Isolated bit-flip, phase-flip, depolarizing, and readout channels are also
+implemented (`src/qml_noise/noise.py`) and unit-tested (`tests/test_noise.py`) — each attaches
+exactly one error mechanism at a time, for attributing degradation to a specific channel — but **no
+result table in this report uses them**: the mandatory matrix, both extensions, and AN-VQC all use
+only the combined `ideal`/`low`/`medium` profiles below. Bit-flip and phase-flip in particular are
+implemented and tested but were never run as part of any experiment reported here.
 
 | Profile | 1-qubit depolarizing | 2-qubit depolarizing | Readout flip | Source |
 |---|---:|---:|---:|---|
@@ -174,10 +191,9 @@ implemented and unit-tested, but the mandatory matrix uses the combined profiles
 | high (optional, unused in the mandatory matrix) | 0.03 | 0.05 | 0.05 | chosen within the table's stated "3-5% gate error" range for its optional Level 3 |
 
 **`low` and `medium` are assignment-specified** -- taken directly from the assignment's noise-level
-guideline table, not chosen by this project (corrected 2026-10-11; see the stale-data warning at
-the top of this report for what that invalidates). `high` is optional and not part of the mandatory
-ideal/low/medium matrix; its exact values are a chosen default since the table gives only a range
-for that tier.
+guideline table, not chosen by this project (corrected 2026-10-11; see the note at the top of this
+report). `high` is optional and not part of the mandatory ideal/low/medium matrix; its exact values
+are a chosen default since the table gives only a range for that tier.
 
 **Evaluation protocol.** For each (qubits, depth) and seed, the VQC is trained once under ideal
 conditions. The same weights are then evaluated under each noise condition by swapping the noise
@@ -200,7 +216,8 @@ is not performed.
 
 The assignment's recommended matrix, unmodified. **Completed: 8 experiments × 5 seeds (0–4) = 40 runs,
 1024 shots in every run**, parameters varied: qubits, depth, noise (three parameters). Five trainings
-per seed cover all eight rows (5 architectures). Total compute was about 28 minutes. E3–E8 used the
+per seed cover all eight rows (5 architectures). Total compute was about 28 minutes (summed
+`training_time_seconds` + `eval_time_seconds` across all 40 saved rows: 28.0 minutes). E3–E8 used the
 full 150-iteration COBYLA budget on every seed; E1 and E2 stopped early on the tolerance criterion
 (mean 92 and 123 iterations).
 
@@ -213,6 +230,11 @@ With A_ideal and A_noisy the accuracies of the same trained weights:
   model scored higher**),
 - relative degradation D_rel = 100 · (A_ideal − A_noisy) / A_ideal,
 - noise robustness ratio R = A_noisy / A_ideal.
+
+Per the assignment's guideline table, robustness is also reported as a **robustness percentage**,
+100 · R (100% = no change in accuracy under noise; below 100% = degraded; above 100% = noisy
+accuracy was higher). For example, E5/E6/E8's mean R values (Section 9.2) correspond to 99.9%,
+98.9%, and 103.5% robustness respectively.
 
 D_rel and R are `NaN` if A_ideal = 0 (never occurred). Values are never clamped, because noise can
 raise measured accuracy. Output distributions are pooled over all test circuits (summed shot
@@ -487,10 +509,35 @@ than this study's documented seed-to-seed noise. This is a negative-to-inconclus
 specific method, weights, and candidate set implemented here; it does not rule out that a
 differently-weighted or differently-calibrated version could do better; that was not tested.
 
+**Suggestions for improving noise resilience.** Based on what this study actually measured, not
+speculation:
+
+- **Prefer cheaper circuits where accuracy allows.** Gate count tracked noise exposure directly in
+  both the main matrix and the sweep (more two-qubit gates → larger TVD at a given noise level); the
+  main matrix's own results show the cheapest architectures were not the least accurate ones
+  (Section 9.1), so the usual accuracy/cost tradeoff is not automatic here.
+- **Target mitigation using the isolated-channel breakdown already implemented.** The project's
+  bit-flip, phase-flip, and depolarizing channel builders noted in Section 6 let a
+  specific noise mechanism be isolated and addressed rather than mitigating "noise" as one
+  undifferentiated thing.
+- **Train under noise, not just evaluate under it.** Every result in this report trains ideally and
+  evaluates under noise afterward (Limitation 2); a model trained with the target noise model in the
+  loop might find parameters in flatter, less noise-sensitive regions of the loss landscape — this
+  was not tested here.
+- **Add standard error-mitigation techniques** (zero-noise extrapolation, readout-error calibration
+  matrices) — not implemented in this project, but readout error is an explicit, separable component
+  of every noise profile used here (Section 6), making it a natural first target.
+- **Recalibrate AN-VQC's cost weight per deployment target** rather than fixing it once. Section 9.4
+  shows the current fixed γ=0.2 traded accuracy for cost without the hoped-for robustness payoff on
+  Iris; a different weighting, or weights tuned to a specific target noise level, might trade off
+  differently — this was not tested.
+
 ## 11. Limitations
 
 1. Simple noise: depolarizing + symmetric readout error only (no thermal relaxation, crosstalk,
-   coherent or device-specific noise); probabilities are chosen defaults.
+   coherent or device-specific noise). `low` and `medium`'s probabilities are assignment-specified
+   (Section 6), not chosen by this project; only the optional `high` tier and the noise sweep's
+   single-to-two-qubit probability ratio (1/10) are chosen defaults.
 2. Noise is applied at evaluation only; models are trained ideally, so noise-aware training is untested.
 3. Small data: 20-sample test sets (5 pp resolution) and 5 seeds; differences of 1–2 samples are noise.
    The easy, linearly separable Iris task leaves little room for degradation to show.
@@ -529,7 +576,7 @@ NormalizedCost is min-max normalized total gate count across the six candidates 
 quantity needing no training. The selected architecture, the best-by-ideal-validation-accuracy
 architecture, a fixed 4-qubit/depth-4 baseline, and a shallow 2-qubit/depth-2 baseline are each
 (re)trained on the full training set and compared on the real test set against Logistic Regression
-and SVM. Related idea in the literature: QuantumNAS (Wang et al., 2021).
+and SVM. Related idea in the literature: QuantumNAS (H. Wang et al., 2021).
 
 **Result, stated honestly (full numbers in Section 9.4): AN-VQC did not improve on the simpler
 ideal-validation-best baseline, and did not even win under its own objective when that objective
@@ -607,6 +654,36 @@ search results; full texts were not read, and descriptions above are limited to 
     179–188. https://doi.org/10.1111/j.1469-1809.1936.tb02137.x
 11. Street, W. N., Wolberg, W. H., Mangasarian, O. L. (1993). Nuclear feature extraction for breast tumor
     diagnosis. *Proc. SPIE* 1905, 861–870. https://doi.org/10.1117/12.148698
+
+## 15. Reproducibility
+
+**Software versions** (pinned in `requirements.txt`, verified compatible with Python 3.14.3 on
+win_amd64): `qiskit==2.5.2`, `qiskit-aer==0.17.2`, `qiskit-machine-learning==0.9.1` (imported for
+compatibility checks; the VQC itself does not use it, see Section 5), `numpy==2.5.4`,
+`pandas==3.0.6`, `scikit-learn==1.9.1`, `matplotlib==3.11.2`, `pytest==9.1.1`, `pylatexenc==2.11`
+(needed for the circuit diagram).
+
+**Seeds:** `config.RANDOM_SEEDS = [0, 1, 2, 3, 4]`, used for the main E1–E8 matrix and both
+extensions (5 seeds each). AN-VQC uses `[0, 1, 2]` (3 seeds) by its own mode definition
+(`AN_VQC_MODE_SEEDS["full"]`). Every seed drives: the stratified train/test split, VQC weight
+initialization, the per-iteration shot-noise simulator seed during training, and the evaluation-time
+simulator seed — so a full run is deterministic given the seed (confirmed in Section 9's
+ideal-baseline consistency checks).
+
+**Dataset sources:** Iris and Breast Cancer Wisconsin Diagnostic, both via scikit-learn's built-in
+loaders (`sklearn.datasets.load_iris`, `sklearn.datasets.load_breast_cancer`); original sources are
+Fisher (1936) and Street, Wolberg & Mangasarian (1993) respectively (References, items 10–11).
+
+**Preprocessing:** stratified 80:20 train/test split (`sklearn.model_selection.train_test_split`,
+`random_state=seed`); `StandardScaler` fit on the training split only; for Breast Cancer, PCA to the
+target qubit count, also fit on training data only (and, for AN-VQC, on the validation-carved inner
+training split only); for Breast Cancer, training is additionally restricted to a 100-sample
+stratified subsample of the training split (Section 4) — the held-out test set is never subsampled,
+scaled using test data, or otherwise touched before final evaluation.
+
+**Noise parameters:** Section 6 gives the exact `low`/`medium`/`high` probabilities and their
+source (assignment table vs. chosen default); the noise-sweep extension's probability list and
+single-to-two-qubit ratio are in Section 9.3.1.
 
 ## Appendix: reproduction
 
