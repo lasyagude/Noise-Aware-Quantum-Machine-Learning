@@ -1,0 +1,12 @@
+# Pinned to versions verified compatible with the installed Python 3.14
+# (win_amd64) environment in .venv as of 2026-10-11. Do not blindly upgrade
+# without re-checking wheel availability for qiskit-aer in particular.
+
+qiskit==2.5.2
+qiskit-aer==0.17.2
+qiskit-machine-learning==0.9.1
+numpy==2.5.4
+pandas==3.0.6
+scikit-learn==1.9.1
+matplotlib==3.11.2
+pytest==9.1.1

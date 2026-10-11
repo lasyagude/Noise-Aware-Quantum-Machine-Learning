@@ -1,0 +1,9 @@
+[project]
+name = "qml-noise-project"
+version = "0.1.0"
+description = "Noise-Aware Quantum Machine Learning: Experimental Analysis and Adaptive Circuit Selection for Robust Classification"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
