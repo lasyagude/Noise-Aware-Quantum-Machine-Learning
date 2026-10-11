@@ -10,3 +10,4 @@ pandas==3.0.6
 scikit-learn==1.9.1
 matplotlib==3.11.2
 pytest==9.1.1
+pylatexenc==2.11

@@ -4,11 +4,11 @@ Noise-Aware Quantum Machine Learning: Experimental Analysis and Adaptive Circuit
 Selection for Robust Classification.
 
 > **Status:** the VQC, noise models, metrics, experiment runner, and the full
-> E1-E8 x 5-seed Iris matrix are done and their results are saved in
-> `results/`. Extension experiments (noise sweep, Breast Cancer, pooled
-> analysis) are implemented and smoke-tested; their long runs are pending.
-> Adaptive circuit selection, plots, and the research report are **not yet
-> implemented**. See `PROGRESS.md` for the exact current state.
+> E1-E8 x 5-seed Iris matrix are done and saved in `results/`. Plotting code,
+> the 4-qubit circuit diagram, and a **draft report** (`report/report.md`) exist;
+> extension runs (noise sweep, Breast Cancer) were still running when the draft
+> was written, and adaptive circuit selection (AN-VQC) is **not implemented**.
+> The report marks every unfinished part with `PLACEHOLDER`. See `PROGRESS.md`.
 
 ## Setup
 
@@ -24,7 +24,7 @@ Python 3.14 with `qiskit 2.5.2`, `qiskit-aer 0.17.2`,
 ## Tests
 
 ```powershell
-pytest          # 192 tests, ~3 minutes
+pytest          # 205 tests collected (training tests make a full run take several minutes)
 ```
 
 ## Project structure
@@ -41,9 +41,11 @@ src/qml_noise/
   evaluation.py   train once per (qubits, depth), evaluate under each noise model
   experiments.py  E1-E8 runner: smoke/normal/full modes, incremental save, resume
   extensions.py   EXTENSION experiments (separate result files, never touch E1-E8)
-tests/            192 tests
+  plotting.py     all plots, from saved results only (skips incomplete/missing data)
+tests/            205 tests
 results/          real experiment output (JSONL/CSV/JSON); results/smoke_checks/ = pipeline checks only
-plots/, report/   not generated yet
+plots/            PNG figures + noise_comparison_table.csv/.md (regenerate: see below)
+report/           report.md (draft; PLACEHOLDERs mark unfinished parts)
 ```
 
 ## Main experiment matrix (E1-E8)
@@ -88,6 +90,20 @@ python -m qml_noise.extensions breast-cancer --mode full    # -> results/extensi
 Both long runs append per record and **resume** if you rerun the same
 command. Options: `--seeds 0,1`, `--maxiter N`, `--force`; Breast Cancer also
 `--train-samples N`. `smoke` mode = 1 seed, 20 iterations.
+
+## Plots and report
+
+```powershell
+python -m qml_noise.plotting     # draws every plot the saved results support
+```
+
+Reads only `results/*.jsonl`; no circuit is run. Plots 1-6 and 8 and the
+circuit diagram (`plots/circuit_4q_depth2.png`, needs `pylatexenc`) are
+generated. `extension_*.png` are drawn only once the extension result files
+are **complete** (all experiment/seed pairs present); `07_standard_vs_adaptive.png`
+needs `results/adaptive_selection_results.jsonl` (provisional schema:
+`method`, `seed`, `accuracy`), which does not exist until AN-VQC is built.
+Re-run the command after the extension runs finish.
 
 ## Quantum classifier
 
