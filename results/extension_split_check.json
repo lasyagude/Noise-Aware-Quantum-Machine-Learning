@@ -1,0 +1,75 @@
+{
+  "dataset": "iris",
+  "seeds_checked": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "test_set_size": 20,
+  "pairwise_comparisons": [
+    {
+      "seed_a": 0,
+      "seed_b": 1,
+      "identical": false,
+      "jaccard_similarity": 0.08108108108108109
+    },
+    {
+      "seed_a": 0,
+      "seed_b": 2,
+      "identical": false,
+      "jaccard_similarity": 0.05263157894736842
+    },
+    {
+      "seed_a": 0,
+      "seed_b": 3,
+      "identical": false,
+      "jaccard_similarity": 0.14285714285714285
+    },
+    {
+      "seed_a": 0,
+      "seed_b": 4,
+      "identical": false,
+      "jaccard_similarity": 0.08108108108108109
+    },
+    {
+      "seed_a": 1,
+      "seed_b": 2,
+      "identical": false,
+      "jaccard_similarity": 0.14285714285714285
+    },
+    {
+      "seed_a": 1,
+      "seed_b": 3,
+      "identical": false,
+      "jaccard_similarity": 0.1111111111111111
+    },
+    {
+      "seed_a": 1,
+      "seed_b": 4,
+      "identical": false,
+      "jaccard_similarity": 0.17647058823529413
+    },
+    {
+      "seed_a": 2,
+      "seed_b": 3,
+      "identical": false,
+      "jaccard_similarity": 0.05263157894736842
+    },
+    {
+      "seed_a": 2,
+      "seed_b": 4,
+      "identical": false,
+      "jaccard_similarity": 0.14285714285714285
+    },
+    {
+      "seed_a": 3,
+      "seed_b": 4,
+      "identical": false,
+      "jaccard_similarity": 0.08108108108108109
+    }
+  ],
+  "all_splits_identical": false,
+  "finding": "Each seed produces a DIFFERENT stratified train/test split (train_test_split's random_state is set to the seed value): confirmed by comparing test-set sample membership across all 10 seed pairs -- none are identical."
+}

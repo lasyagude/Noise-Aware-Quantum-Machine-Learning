@@ -205,16 +205,23 @@ class ExperimentRecord:
         }
 
 
-def evaluate_vqc_under_condition(
+def evaluate_vqc_with_noise_model(
     artifact: TrainedVQCArtifact,
     experiment_id: str,
-    noise_condition: str,
+    noise_model,
+    noise_label: str,
     *,
     dataset: str = "iris",
     reused_training_from: str | None = None,
-    noise_probability: float | None = None,
 ) -> ExperimentRecord:
-    """Evaluate a trained VQC's weights under a given noise condition.
+    """Evaluate a trained VQC's weights under an arbitrary, already-built noise model.
+
+    This is the noise-model-agnostic core that :func:`evaluate_vqc_under_condition`
+    wraps for the named ideal/low/medium/isolated-channel conditions. Extension
+    experiments that need a noise model shaped outside that named set (e.g. a
+    custom depolarizing-probability sweep) call this directly, passing their
+    own ``qiskit_aer.noise.NoiseModel`` (or ``None`` for ideal) plus a
+    descriptive ``noise_label`` to record in place of a condition name.
 
     Swaps the noise model on the already-trained model (see module
     docstring); does not retrain. ``reused_training_from`` is purely
@@ -224,7 +231,7 @@ def evaluate_vqc_under_condition(
     """
     model = artifact.model
     start = time.perf_counter()
-    model.set_noise_model(get_noise_model(noise_condition, noise_probability))
+    model.set_noise_model(noise_model)
     predictions = model.predict(artifact.split.X_test, seed_simulator=artifact.seed)
     metrics = classification_metrics(artifact.split.y_test, predictions)
     counts = model.measurement_counts(artifact.split.X_test, seed_simulator=artifact.seed)
@@ -247,7 +254,7 @@ def evaluate_vqc_under_condition(
         dataset=dataset,
         n_qubits=artifact.resources.n_qubits,
         logical_depth=artifact.resources.logical_depth,
-        noise_condition=noise_condition,
+        noise_condition=noise_label,
         shots=model.shots,
         accuracy=metrics.accuracy,
         precision=metrics.precision,
@@ -282,7 +289,7 @@ def evaluate_vqc_under_condition(
         artifact.seed,
         record.n_qubits,
         record.logical_depth,
-        noise_condition,
+        noise_label,
         record.accuracy,
         record.degradation_pp,
         record.robustness_ratio,
@@ -290,3 +297,31 @@ def evaluate_vqc_under_condition(
         record.runtime_seconds,
     )
     return record
+
+
+def evaluate_vqc_under_condition(
+    artifact: TrainedVQCArtifact,
+    experiment_id: str,
+    noise_condition: str,
+    *,
+    dataset: str = "iris",
+    reused_training_from: str | None = None,
+    noise_probability: float | None = None,
+) -> ExperimentRecord:
+    """Evaluate a trained VQC's weights under a named noise condition.
+
+    Thin wrapper around :func:`evaluate_vqc_with_noise_model`: resolves
+    ``noise_condition`` (``"ideal"``/``"low"``/``"medium"`` or an isolated
+    channel name) to a noise model via :func:`qml_noise.noise.get_noise_model`,
+    then delegates. See that function and the module docstring for what
+    "evaluate under noise" means here (swap, don't retrain).
+    """
+    noise_model = get_noise_model(noise_condition, noise_probability)
+    return evaluate_vqc_with_noise_model(
+        artifact,
+        experiment_id,
+        noise_model,
+        noise_condition,
+        dataset=dataset,
+        reused_training_from=reused_training_from,
+    )

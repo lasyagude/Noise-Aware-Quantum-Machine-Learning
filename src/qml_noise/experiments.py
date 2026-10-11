@@ -42,11 +42,12 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 from qml_noise.classical import run_all_classical_baselines
 from qml_noise.config import RANDOM_SEEDS, RESULTS_DIR, VQC_CONFIG, get_logger
-from qml_noise.datasets import load_dataset
+from qml_noise.datasets import DatasetSplit, load_dataset
 from qml_noise.evaluation import evaluate_vqc_under_condition, train_ideal_vqc
 
 logger = get_logger(__name__)
@@ -128,7 +129,12 @@ def group_matrix_by_architecture(
     return groups
 
 
-def _load_jsonl(path: Path) -> list[dict]:
+def load_jsonl(path: Path) -> list[dict]:
+    """Read a JSON-Lines file into a list of dicts (``[]`` if it doesn't exist).
+
+    Public: also used by ``qml_noise.extensions`` to read the real E1-E8
+    results for pooled analysis, and to implement its own resume logic.
+    """
     if not path.exists():
         return []
     records = []
@@ -140,7 +146,8 @@ def _load_jsonl(path: Path) -> list[dict]:
     return records
 
 
-def _append_jsonl(path: Path, record: dict) -> None:
+def append_jsonl(path: Path, record: dict) -> None:
+    """Append one record as a line to a JSON-Lines file (creating it if needed)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record) + "\n")
@@ -149,13 +156,13 @@ def _append_jsonl(path: Path, record: dict) -> None:
 def _completed_vqc_pairs(path: Path) -> set[tuple[str, int]]:
     return {
         (r["experiment_id"], r["seed"])
-        for r in _load_jsonl(path)
+        for r in load_jsonl(path)
         if r.get("status") == "completed"
     }
 
 
 def _completed_classical_pairs(path: Path) -> set[tuple[str, int]]:
-    return {(r["model_name"], r["seed"]) for r in _load_jsonl(path)}
+    return {(r["model_name"], r["seed"]) for r in load_jsonl(path)}
 
 
 def run_classical_baselines_for_seed(
@@ -164,14 +171,21 @@ def run_classical_baselines_for_seed(
     results_file: Path = CLASSICAL_RESULTS_FILE,
     *,
     force: bool = False,
+    split: DatasetSplit | None = None,
+    extra_record_fields: dict | None = None,
 ) -> list[dict]:
     """Run + save Logistic Regression and SVM for one seed, skipping if done.
 
     These are independent of (qubits, depth), so they are keyed by
-    ``(model_name, seed)`` rather than ``(experiment_id, seed)``.
+    ``(model_name, seed)`` rather than ``(experiment_id, seed)``. Pass an
+    already-built ``split`` (e.g. subsampled) to reuse it instead of loading
+    ``dataset`` fresh -- used by extension experiments that need the exact
+    same split for classical and quantum models. ``extra_record_fields`` is
+    merged into every saved dict, e.g. to tag extension records.
     """
     completed = set() if force else _completed_classical_pairs(results_file)
-    split = load_dataset(dataset, seed=seed)
+    if split is None:
+        split = load_dataset(dataset, seed=seed)
     saved = []
     for result in run_all_classical_baselines(split):
         key = (result.model_name, seed)
@@ -183,7 +197,9 @@ def run_classical_baselines_for_seed(
             )
             continue
         record = result.to_dict()
-        _append_jsonl(results_file, record)
+        if extra_record_fields:
+            record.update(extra_record_fields)
+        append_jsonl(results_file, record)
         saved.append(record)
         logger.info(
             "Saved classical %s seed=%d accuracy=%.4f",
@@ -196,7 +212,7 @@ def run_classical_baselines_for_seed(
 
 def _write_summary_csv(jsonl_path: Path, csv_path: Path) -> None:
     """Regenerate a scalar-only CSV view of the JSONL results."""
-    records = _load_jsonl(jsonl_path)
+    records = load_jsonl(jsonl_path)
     if not records:
         return
     csv_path.parent.mkdir(parents=True, exist_ok=True)
@@ -214,6 +230,9 @@ def run_matrix(
     maxiter: int | None = None,
     dataset: str = "iris",
     matrix: tuple[tuple[str, int, int, str], ...] | None = None,
+    prepare_split: Callable[[DatasetSplit, int], DatasetSplit] | None = None,
+    experiment_id_prefix: str = "",
+    extra_record_fields: dict | None = None,
     results_file: Path = VQC_RESULTS_FILE,
     results_csv: Path = VQC_RESULTS_CSV,
     classical_results_file: Path = CLASSICAL_RESULTS_FILE,
@@ -221,11 +240,28 @@ def run_matrix(
 ) -> list[dict]:
     """Run the E1-E8 matrix for the given mode. Returns newly-saved records.
 
-    Already-completed ``(experiment_id, seed)`` pairs are skipped. Pass
-    ``force=True`` to delete existing result files and rerun everything.
-    ``matrix`` defaults to the mandatory ``EXPERIMENT_MATRIX``; tests may
-    override it with a smaller synthetic matrix to exercise the resume/force
-    bookkeeping without paying for the full 6-qubit architecture.
+    Already-completed ``(experiment_id, seed)`` pairs are skipped (the
+    *prefixed* id, if ``experiment_id_prefix`` is set -- that is what ends
+    up on disk and is what resume compares against). Pass ``force=True`` to
+    delete existing result files and rerun everything.
+
+    ``matrix`` defaults to the mandatory ``EXPERIMENT_MATRIX``; tests and
+    extensions may override it with a different matrix.
+
+    ``prepare_split``, ``experiment_id_prefix``, and ``extra_record_fields``
+    exist so :mod:`qml_noise.extensions` can reuse this exact
+    grouping/training/resume/incremental-save machinery for a different
+    dataset (e.g. Breast Cancer, with a subsampled training set and
+    ``"BC-"``-prefixed experiment ids) without duplicating it:
+
+    - ``prepare_split(split, seed)`` is applied right after loading the
+      dataset, before both classical baselines and VQC training see it --
+      so they are trained/evaluated on exactly the same (possibly
+      transformed) split.
+    - ``experiment_id_prefix`` is prepended to every saved
+      ``experiment_id`` (and to the ``reused_training_from`` it points at).
+    - ``extra_record_fields`` is merged into every saved VQC and classical
+      record, e.g. ``{"extension": "breast_cancer"}``.
     """
     if mode not in MODES:
         raise ValueError(f"Unknown mode '{mode}'. Choose from {MODES}")
@@ -262,11 +298,23 @@ def run_matrix(
 
     new_records: list[dict] = []
     for seed in seeds:
-        run_classical_baselines_for_seed(seed, dataset, classical_results_file, force=force)
         split = load_dataset(dataset, seed=seed)
+        if prepare_split is not None:
+            split = prepare_split(split, seed)
+
+        run_classical_baselines_for_seed(
+            seed,
+            dataset,
+            classical_results_file,
+            force=force,
+            split=split,
+            extra_record_fields=extra_record_fields,
+        )
 
         for (n_qubits, depth), rows in groups.items():
-            pending = [row for row in rows if (row[0], seed) not in completed]
+            pending = [
+                row for row in rows if (f"{experiment_id_prefix}{row[0]}", seed) not in completed
+            ]
             if not pending:
                 logger.info(
                     "qubits=%d depth=%d seed=%d: all experiments already "
@@ -283,20 +331,27 @@ def run_matrix(
             )
 
             for experiment_id, _, _, noise_condition in rows:
-                if (experiment_id, seed) in completed:
-                    logger.info("Skipping %s seed=%d (already completed)", experiment_id, seed)
+                prefixed_id = f"{experiment_id_prefix}{experiment_id}"
+                if (prefixed_id, seed) in completed:
+                    logger.info("Skipping %s seed=%d (already completed)", prefixed_id, seed)
                     continue
-                reused_from = None if noise_condition == "ideal" else ideal_experiment_id
+                reused_from = (
+                    None
+                    if noise_condition == "ideal"
+                    else f"{experiment_id_prefix}{ideal_experiment_id}"
+                )
                 record = evaluate_vqc_under_condition(
                     artifact,
-                    experiment_id,
+                    prefixed_id,
                     noise_condition,
                     dataset=dataset,
                     reused_training_from=reused_from,
                 )
                 record_dict = record.to_dict()
-                _append_jsonl(results_file, record_dict)
-                completed.add((experiment_id, seed))
+                if extra_record_fields:
+                    record_dict.update(extra_record_fields)
+                append_jsonl(results_file, record_dict)
+                completed.add((prefixed_id, seed))
                 new_records.append(record_dict)
 
     if new_records:

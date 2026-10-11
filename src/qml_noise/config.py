@@ -167,6 +167,24 @@ NOISE_PROFILES: dict[str, NoiseProfile] = {
 ISOLATED_CHANNEL_PROBABILITIES: tuple[float, ...] = (0.01, 0.02, 0.05, 0.10)
 
 # ---------------------------------------------------------------------------
+# Extension experiments (chosen defaults -- NOT mandated by the assignment;
+# see src/qml_noise/extensions.py)
+# ---------------------------------------------------------------------------
+
+# Depolarizing noise sweep: two-qubit-gate probability levels. The
+# single-qubit probability at each level is this value times the ratio
+# below (real hardware's single-qubit gates are typically ~10x cleaner
+# than its two-qubit gates, so the ratio keeps the sweep qualitatively
+# realistic rather than scanning an unphysical 1:1 regime).
+NOISE_SWEEP_TWO_QUBIT_PROBABILITIES: tuple[float, ...] = (0.0, 0.001, 0.005, 0.01, 0.02, 0.05)
+NOISE_SWEEP_SINGLE_TO_TWO_QUBIT_RATIO: float = 0.1
+
+# Breast Cancer extension: training-set subsample size. Chosen purely to
+# keep VQC training runtime bounded on 30-feature data; evaluation always
+# uses the FULL held-out test set, never a subsample of it.
+BREAST_CANCER_TRAIN_SUBSAMPLE_SIZE: int = 100
+
+# ---------------------------------------------------------------------------
 # VQC training defaults (chosen defaults)
 # ---------------------------------------------------------------------------
 

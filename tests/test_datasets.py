@@ -9,6 +9,7 @@ from qml_noise.datasets import (
     load_dataset,
     load_iris_binary,
     load_wine_reduced,
+    subsample_training_stratified,
 )
 
 
@@ -100,3 +101,53 @@ def test_load_dataset_unknown_name_raises():
 def test_load_dataset_case_insensitive():
     split = load_dataset("IRIS", seed=0)
     assert split.dataset_name == "iris"
+
+
+# -- subsample_training_stratified -------------------------------------------
+
+
+def test_subsample_reduces_training_set_size_only():
+    split = load_breast_cancer_reduced(seed=0)
+    original_test_size = split.X_test.shape[0]
+    sub = subsample_training_stratified(split, n_samples=50, seed=0)
+    assert sub.X_train.shape[0] == 50
+    assert sub.y_train.shape[0] == 50
+    # The held-out test set must be completely untouched.
+    assert sub.X_test.shape[0] == original_test_size
+    assert np.array_equal(sub.X_test, split.X_test)
+    assert np.array_equal(sub.y_test, split.y_test)
+
+
+def test_subsample_preserves_class_balance_roughly():
+    split = load_breast_cancer_reduced(seed=0)
+    sub = subsample_training_stratified(split, n_samples=100, seed=0)
+    original_fraction = split.y_train.mean()
+    sub_fraction = sub.y_train.mean()
+    assert abs(original_fraction - sub_fraction) < 0.1
+
+
+def test_subsample_noop_when_n_samples_exceeds_training_set():
+    split = load_iris_binary(seed=0)  # only 80 training samples
+    sub = subsample_training_stratified(split, n_samples=1000, seed=0)
+    assert sub is split  # returned unchanged, not a copy
+
+
+def test_subsample_reproducible_with_same_seed():
+    split = load_breast_cancer_reduced(seed=0)
+    a = subsample_training_stratified(split, n_samples=50, seed=3)
+    b = subsample_training_stratified(split, n_samples=50, seed=3)
+    assert np.array_equal(a.X_train, b.X_train)
+    assert np.array_equal(a.y_train, b.y_train)
+
+
+def test_subsample_differs_with_different_seed():
+    split = load_breast_cancer_reduced(seed=0)
+    a = subsample_training_stratified(split, n_samples=50, seed=1)
+    b = subsample_training_stratified(split, n_samples=50, seed=2)
+    assert not np.array_equal(a.X_train, b.X_train)
+
+
+def test_subsample_rejects_non_positive_n_samples():
+    split = load_breast_cancer_reduced(seed=0)
+    with pytest.raises(ValueError):
+        subsample_training_stratified(split, n_samples=0, seed=0)

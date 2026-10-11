@@ -322,3 +322,91 @@ def test_invalid_mode_raises():
 def test_empty_seeds_raises(tmp_path):
     with pytest.raises(ValueError):
         run_matrix("smoke", seeds=[], results_file=tmp_path / "x.jsonl")
+
+
+# -- generalization hooks: prepare_split / experiment_id_prefix / extra_record_fields --
+# These exist so qml_noise.extensions can reuse run_matrix for a different
+# dataset (Breast Cancer) without duplicating its grouping/resume logic.
+
+
+def test_experiment_id_prefix_applies_to_saved_ids_and_resume_keys(tmp_path):
+    results_file = tmp_path / "vqc.jsonl"
+    results_csv = tmp_path / "vqc.csv"
+    classical_file = tmp_path / "classical.jsonl"
+
+    records = run_matrix(
+        "smoke",
+        seeds=[0],
+        maxiter=5,
+        matrix=_TINY_MATRIX,
+        experiment_id_prefix="X-",
+        results_file=results_file,
+        results_csv=results_csv,
+        classical_results_file=classical_file,
+    )
+    ids = {r["experiment_id"] for r in records}
+    assert ids == {"X-T1", "X-T2"}
+
+    by_id = {r["experiment_id"]: r for r in records}
+    assert by_id["X-T1"]["reused_training_from"] is None
+    assert by_id["X-T2"]["reused_training_from"] == "X-T1"
+
+    # Resume must recognize the prefixed ids already on disk.
+    resumed = run_matrix(
+        "smoke",
+        seeds=[0],
+        maxiter=5,
+        matrix=_TINY_MATRIX,
+        experiment_id_prefix="X-",
+        results_file=results_file,
+        results_csv=results_csv,
+        classical_results_file=classical_file,
+    )
+    assert resumed == []
+
+
+def test_extra_record_fields_merged_into_vqc_and_classical_records(tmp_path):
+    results_file = tmp_path / "vqc.jsonl"
+    results_csv = tmp_path / "vqc.csv"
+    classical_file = tmp_path / "classical.jsonl"
+
+    run_matrix(
+        "smoke",
+        seeds=[0],
+        maxiter=5,
+        matrix=_TINY_MATRIX,
+        extra_record_fields={"extension": "unit_test"},
+        results_file=results_file,
+        results_csv=results_csv,
+        classical_results_file=classical_file,
+    )
+
+    for record in _read_jsonl(results_file):
+        assert record["extension"] == "unit_test"
+    for record in _read_jsonl(classical_file):
+        assert record["extension"] == "unit_test"
+
+
+def test_prepare_split_hook_is_applied_before_training_and_classical_baselines(tmp_path):
+    results_file = tmp_path / "vqc.jsonl"
+    results_csv = tmp_path / "vqc.csv"
+    classical_file = tmp_path / "classical.jsonl"
+    calls = []
+
+    def _spy_prepare(split, seed):
+        calls.append((split.X_train.shape[0], seed))
+        return split
+
+    run_matrix(
+        "smoke",
+        seeds=[0],
+        maxiter=5,
+        matrix=_TINY_MATRIX,
+        prepare_split=_spy_prepare,
+        results_file=results_file,
+        results_csv=results_csv,
+        classical_results_file=classical_file,
+    )
+    assert len(calls) == 1
+    assert calls[0][1] == 0  # seed passed through
+    assert calls[0][0] > 0  # a real training-set size was seen

@@ -16,7 +16,7 @@ All loaders:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 from sklearn.datasets import load_breast_cancer, load_iris, load_wine
@@ -175,6 +175,33 @@ def load_breast_cancer_reduced(
         n_classes=len(set(y)),
         seed=seed,
     )
+
+
+def subsample_training_stratified(
+    split: DatasetSplit, *, n_samples: int, seed: int
+) -> DatasetSplit:
+    """Return a copy of ``split`` with the training set stratified-subsampled.
+
+    Used by the Breast Cancer extension to keep VQC training runtime
+    bounded on 30-feature data: training sees only ``n_samples`` training
+    points, but evaluation always uses the full, untouched ``X_test`` /
+    ``y_test`` -- the held-out test set is never subsampled, and this
+    function never looks at it. If ``n_samples >= len(split.y_train)``,
+    ``split`` is returned unchanged (nothing to subsample).
+    """
+    if n_samples >= len(split.y_train):
+        return split
+    if n_samples < 1:
+        raise ValueError(f"n_samples must be >= 1, got {n_samples}")
+
+    X_sub, _, y_sub, _ = train_test_split(
+        split.X_train,
+        split.y_train,
+        train_size=n_samples,
+        stratify=split.y_train,
+        random_state=seed,
+    )
+    return replace(split, X_train=X_sub, y_train=y_sub)
 
 
 def load_dataset(

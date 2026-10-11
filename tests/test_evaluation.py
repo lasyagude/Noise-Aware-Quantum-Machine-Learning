@@ -6,8 +6,10 @@ from qml_noise.datasets import load_iris_binary
 from qml_noise.evaluation import (
     TrainedVQCArtifact,
     evaluate_vqc_under_condition,
+    evaluate_vqc_with_noise_model,
     train_ideal_vqc,
 )
+from qml_noise.noise import get_noise_model
 
 
 @pytest.fixture(scope="module")
@@ -101,3 +103,46 @@ def test_different_architecture_trains_independently(iris_split):
     artifact = train_ideal_vqc(4, 2, seed=0, split=iris_split, maxiter=10)
     assert artifact.resources.n_qubits == 4
     assert artifact.resources.n_trainable_parameters == 16
+
+
+# -- evaluate_vqc_with_noise_model (the noise-model-agnostic core) ----------
+
+
+def test_evaluate_with_noise_model_matches_condition_wrapper_for_ideal(ideal_artifact):
+    """evaluate_vqc_under_condition is a thin wrapper; results must match exactly."""
+    via_condition = evaluate_vqc_under_condition(ideal_artifact, "E_TEST", "ideal")
+    via_model = evaluate_vqc_with_noise_model(
+        ideal_artifact, "E_TEST", None, noise_label="ideal"
+    )
+    assert via_model.accuracy == pytest.approx(via_condition.accuracy)
+    assert via_model.distribution_total_variation_distance == pytest.approx(
+        via_condition.distribution_total_variation_distance
+    )
+
+
+def test_evaluate_with_noise_model_matches_condition_wrapper_for_medium(ideal_artifact):
+    via_condition = evaluate_vqc_under_condition(ideal_artifact, "E_TEST", "medium")
+    via_model = evaluate_vqc_with_noise_model(
+        ideal_artifact, "E_TEST", get_noise_model("medium"), noise_label="medium"
+    )
+    assert via_model.accuracy == pytest.approx(via_condition.accuracy)
+    assert via_model.distribution_total_variation_distance == pytest.approx(
+        via_condition.distribution_total_variation_distance
+    )
+
+
+def test_evaluate_with_noise_model_accepts_custom_noise_model(ideal_artifact):
+    """Extensions pass a hand-built noise model with a descriptive label."""
+    from qml_noise.noise import build_depolarizing_noise_model
+
+    custom = build_depolarizing_noise_model(0.002, two_qubit_probability=0.02)
+    record = evaluate_vqc_with_noise_model(
+        ideal_artifact,
+        "NSWEEP-TEST",
+        custom,
+        noise_label="depolarizing(p1=0.002,p2=0.02)",
+        reused_training_from="E_IDEAL",
+    )
+    assert record.noise_condition == "depolarizing(p1=0.002,p2=0.02)"
+    assert record.reused_training_from == "E_IDEAL"
+    assert record.distribution_total_variation_distance >= 0.0
