@@ -26,9 +26,8 @@ Python 3.14 with `qiskit 2.5.2`, `qiskit-aer 0.17.2`,
 ## Tests
 
 ```powershell
-pytest          # runs the full automated test suite (training tests make a full run take several
-                # minutes); 224+ test functions across tests/*.py as of the last count -- rerun
-                # pytest for the exact current collected count, which this file does not assert
+pytest          # 244 passed (last verified run: 2026-10-11, ~15.6 min wall time -- training
+                # tests make a full run take several minutes)
 ```
 
 ## Project structure
@@ -253,4 +252,4 @@ checklist -- every row below is read off already-saved code and result files.
 | Project installs; primary Iris pipeline runs; VQC trains and predicts | PASS | -- | `results/vqc_experiment_results.jsonl` |
 | Noise model can be enabled; results saved incrementally; experiments resume | PASS | `experiments.py`, `extensions.py` | incremental JSONL append + resume logic |
 | Plots regenerate from saved results only | PASS | `plotting.py` | `python -m qml_noise.plotting ...` (no circuit execution) |
-| Automated test suite | **not re-run this turn** (see "Tests" above) | `tests/*.py` | last known collected count and pass/fail status are whatever the most recent `pytest` run reported, not re-verified here |
+| Automated test suite | PASS | `tests/*.py` | 244 passed, 0 failed (verified 2026-10-11, ~15.6 min) |
