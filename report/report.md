@@ -7,6 +7,16 @@ pooled analysis (`results/extension_pooled_analysis.json`). Anything not yet run
 still in progress when this draft was written, and the adaptive method (AN-VQC) is not implemented.
 Search the file for `PLACEHOLDER` to find everything that must be filled in before submission.
 
+> **STALE DATA WARNING (2026-10-11).** `config.NOISE_PROFILES["low"]` and `["medium"]` were
+> corrected to match the assignment's noise-level guideline table exactly (see the updated Section
+> 6 table below). All numbers in this report under the `low`/`medium` conditions -- **E5, E6, E8**
+> throughout Section 9, the pooled-analysis bootstrap CIs, every figure/table derived from them,
+> and anything in the Abstract/Discussion/Conclusion that cites those numbers -- were computed
+> under the *old* probabilities and are **not valid under the corrected noise model**. They have
+> not been deleted or rewritten here (they are real, not fabricated, just stale), but they must be
+> regenerated before this report is final. See `PROGRESS.md` for the exact affected files and
+> regeneration commands. E1–E4 and E7 (`ideal`) are unaffected (no noise model attached).
+
 ---
 
 ## Abstract
@@ -140,15 +150,18 @@ readout error on `measure`. `rz` carries **no** error because on superconducting
 virtual frame change. Isolated bit-flip, phase-flip, depolarizing and readout channels are also
 implemented and unit-tested, but the mandatory matrix uses the combined profiles below.
 
-| Profile | 1-qubit depolarizing | 2-qubit depolarizing | Readout flip |
-|---|---:|---:|---:|
-| ideal | 0 | 0 | 0 |
-| low | 0.001 | 0.01 | 0.01 |
-| medium | 0.005 | 0.05 | 0.03 |
+| Profile | 1-qubit depolarizing | 2-qubit depolarizing | Readout flip | Source |
+|---|---:|---:|---:|---|
+| ideal | 0 | 0 | 0 | trivial |
+| low | 0.001 | 0.005 | 0.01 | assignment guideline table, Level 1 |
+| medium | 0.01 | 0.02 | 0.03 | assignment guideline table, Level 2 |
+| high (optional, unused in the mandatory matrix) | 0.03 | 0.05 | 0.05 | chosen within the table's stated "3-5% gate error" range for its optional Level 3 |
 
-**These probabilities are chosen simulation defaults, not values given by the assignment**
-(documented in `src/qml_noise/config.py`). Conclusions are therefore about this noise family and
-these levels, not about any specific device.
+**`low` and `medium` are assignment-specified** -- taken directly from the assignment's noise-level
+guideline table, not chosen by this project (corrected 2026-10-11; see the stale-data warning at
+the top of this report for what that invalidates). `high` is optional and not part of the mandatory
+ideal/low/medium matrix; its exact values are a chosen default since the table gives only a range
+for that tier.
 
 **Evaluation protocol.** For each (qubits, depth) and seed, the VQC is trained once under ideal
 conditions. The same weights are then evaluated under each noise condition by swapping the noise
@@ -194,6 +207,9 @@ deviation (ddof = 0). With n = 5 and a 20-sample test set, accuracy moves in ste
 single-seed differences of one or two steps are within noise.
 
 ## 9. Results
+
+> **STALE — see the warning at the top of this report.** E5, E6, and E8 below were computed under
+> the pre-correction `low`/`medium` noise probabilities and must be regenerated.
 
 All numbers are read from `results/vqc_experiment_results.jsonl`; the full table is
 `plots/noise_comparison_table.csv`. Figures are regenerated with

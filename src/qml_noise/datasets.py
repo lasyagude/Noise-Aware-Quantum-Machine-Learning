@@ -204,6 +204,35 @@ def subsample_training_stratified(
     return replace(split, X_train=X_sub, y_train=y_sub)
 
 
+def carve_validation(split: DatasetSplit, *, val_fraction: float, seed: int) -> DatasetSplit:
+    """Carve a stratified validation set out of ``split.X_train``/``y_train`` ONLY.
+
+    Returns a new ``DatasetSplit`` whose ``X_train``/``y_train`` is the
+    remaining ``(1 - val_fraction)`` of the original training data, and
+    whose ``X_test``/``y_test`` is the carved-out validation portion. This
+    lets existing training/evaluation helpers (``train_ideal_vqc``,
+    ``evaluate_vqc_under_condition``) be reused unchanged for
+    validation-based model selection -- they always evaluate against
+    whatever is in ``X_test``/``y_test``, which here is the validation set,
+    never the real held-out test set.
+
+    This function reads only ``split.X_train`` and ``split.y_train``. The
+    original ``split.X_test``/``y_test`` (the real test set) is never
+    touched and does not appear anywhere in the object this returns.
+    """
+    if not (0.0 < val_fraction < 1.0):
+        raise ValueError(f"val_fraction must be in (0, 1), got {val_fraction}")
+
+    X_inner, X_val, y_inner, y_val = train_test_split(
+        split.X_train,
+        split.y_train,
+        test_size=val_fraction,
+        stratify=split.y_train,
+        random_state=seed,
+    )
+    return replace(split, X_train=X_inner, y_train=y_inner, X_test=X_val, y_test=y_val)
+
+
 def load_dataset(
     name: str,
     *,

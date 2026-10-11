@@ -111,3 +111,20 @@ Angle encoding (`H` + `RY(x_i)`), `depth` repeated blocks of trainable `RY`/`RZ`
 plus a `CNOT` ring, all qubits measured, parity readout. Noise attaches to
 transpiled `sx`/`x`/`cx` and `measure`; `rz` is error-free (virtual frame
 change). See `src/qml_noise/vqc.py`, `circuits.py`, `noise.py`.
+
+## Noise levels (`config.NOISE_PROFILES`)
+
+`low` and `medium` are **assignment-specified** -- taken directly from the
+assignment's noise-level guideline table, not chosen by this project:
+
+| Profile | Single-qubit | Two-qubit | Readout | Source |
+|---|---:|---:|---:|---|
+| low | 0.1% | 0.5% | 1% | assignment table, Level 1 |
+| medium | 1% | 2% | 3% | assignment table, Level 2 |
+| high (optional) | 3% | 5% | 5% | chosen within the table's stated "3-5% gate error" range for the optional Level 3 tier |
+
+`low`/`medium` were corrected to these exact values on 2026-10-11 (previous
+values were chosen defaults, since no guideline table had been supplied at
+the time). Any saved result row evaluated under `"low"` or `"medium"` from
+before that date used the old probabilities; see `PROGRESS.md` for which
+files that affects and the exact regeneration commands.

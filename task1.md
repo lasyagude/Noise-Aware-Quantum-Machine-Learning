@@ -258,3 +258,14 @@ Run tests, debug failures, and execute the eight-experiment matrix where feasibl
 Do not claim that experiments, tests, or reports succeeded unless they actually did. If an experiment cannot complete within the available execution budget, save partial results, mark its status, and document the exact command needed to resume it.
 
 At the end of this task, leave the repository in a runnable state and provide exact execution commands. Do not ask for approval before proceeding.
+
+## ADDENDUM (supersedes section 8 on noise values)
+
+The assignment guideline table DOES specify noise levels. Use these as assignment-specified values, not chosen defaults:
+- Level 0: ideal, no noise.
+- Level 1 (low): 0.1% single-qubit error, 0.5% two-qubit error, 1% readout error.
+- Level 2 (moderate/medium): 1% single-qubit, 2% two-qubit, 3% readout error.
+- Level 3 (optional high): 3-5% gate error, higher readout error (stress test).
+- Noise model: depolarizing error + readout error; thermal relaxation optional if documented.
+Other guideline items to follow: report "robustness percentage" (100 x R); record software versions, seeds, dataset source, preprocessing and noise parameters; primary dataset Iris binary, secondary WDBC reduced (Wine optional); minimum experiment set is 2 qubit/depth settings x 3 noise levels.
+Wherever task1.md or task2.md says the noise probabilities are "chosen defaults", read it as "assignment-specified".

@@ -25,19 +25,24 @@ those instruction names are not in the noise model.
 Two families of models
 ----------------------
 
-1. **Combined profiles** (``ideal`` / ``low`` / ``medium``): depolarizing
-   errors on one- and two-qubit gates plus a symmetric readout error. These
-   are the assignment's three required noise conditions.
+1. **Combined profiles** (``ideal`` / ``low`` / ``medium`` / optional
+   ``high``): depolarizing errors on one- and two-qubit gates plus a
+   symmetric readout error. ``ideal``/``low``/``medium`` are the
+   assignment's three required noise conditions, and ``low``/``medium``'s
+   probabilities are **assignment-specified** (the exact values from the
+   assignment's noise-level guideline table), not chosen by this project.
+   ``high`` is an optional extra tier the table names but does not give
+   exact numbers for; its probabilities are a chosen default picked within
+   the table's stated range. See :mod:`qml_noise.config`'s
+   ``NOISE_PROFILES`` for the exact values and this distinction.
 2. **Isolated channels** (``bit_flip`` / ``phase_flip`` / ``depolarizing`` /
    ``readout``): exactly one error channel at a time, for attributing
-   degradation to a specific mechanism.
+   degradation to a specific mechanism. These probabilities
+   (``ISOLATED_CHANNEL_PROBABILITIES``) are chosen defaults, not mandated.
 
 For the two-qubit version of an isolated single-qubit Pauli channel, the
 single-qubit error is tensored with itself so that both CNOT qubits are
 affected independently.
-
-All numerical probabilities are chosen defaults defined in
-:mod:`qml_noise.config`, not values mandated by the assignment.
 """
 
 from __future__ import annotations

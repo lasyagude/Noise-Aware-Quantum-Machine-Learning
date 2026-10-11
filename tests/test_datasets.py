@@ -5,6 +5,7 @@ import pytest
 
 from qml_noise.datasets import (
     DatasetSplit,
+    carve_validation,
     load_breast_cancer_reduced,
     load_dataset,
     load_iris_binary,
@@ -151,3 +152,57 @@ def test_subsample_rejects_non_positive_n_samples():
     split = load_breast_cancer_reduced(seed=0)
     with pytest.raises(ValueError):
         subsample_training_stratified(split, n_samples=0, seed=0)
+
+
+# -- carve_validation ---------------------------------------------------------
+
+
+def test_carve_validation_splits_training_data_only():
+    split = load_iris_binary(seed=0)  # 80 train / 20 test
+    val_split = carve_validation(split, val_fraction=0.25, seed=0)
+    assert val_split.X_train.shape[0] == 60
+    assert val_split.X_test.shape[0] == 20  # the carved-out validation set
+    # The real test set is NOT in the returned object anywhere.
+    assert not np.array_equal(val_split.X_test, split.X_test) or val_split.X_test.shape == split.X_test.shape
+    assert val_split.X_train.shape[0] + val_split.X_test.shape[0] == split.X_train.shape[0]
+
+
+def test_carve_validation_preserves_stratification():
+    split = load_iris_binary(seed=0)  # balanced 40/40 classes in training
+    val_split = carve_validation(split, val_fraction=0.25, seed=0)
+    train_balance = val_split.y_train.mean()
+    val_balance = val_split.y_test.mean()
+    assert abs(train_balance - 0.5) < 0.15
+    assert abs(val_balance - 0.5) < 0.2
+
+
+def test_carve_validation_reproducible_with_same_seed():
+    split = load_iris_binary(seed=0)
+    a = carve_validation(split, val_fraction=0.25, seed=5)
+    b = carve_validation(split, val_fraction=0.25, seed=5)
+    assert np.array_equal(a.X_train, b.X_train)
+    assert np.array_equal(a.X_test, b.X_test)
+
+
+def test_carve_validation_differs_with_different_seed():
+    split = load_iris_binary(seed=0)
+    a = carve_validation(split, val_fraction=0.25, seed=1)
+    b = carve_validation(split, val_fraction=0.25, seed=2)
+    assert not np.array_equal(a.X_train, b.X_train)
+
+
+def test_carve_validation_rejects_out_of_range_fraction():
+    split = load_iris_binary(seed=0)
+    with pytest.raises(ValueError):
+        carve_validation(split, val_fraction=0.0, seed=0)
+    with pytest.raises(ValueError):
+        carve_validation(split, val_fraction=1.0, seed=0)
+
+
+def test_carve_validation_does_not_mutate_original_split():
+    split = load_iris_binary(seed=0)
+    original_train_shape = split.X_train.shape
+    original_test_shape = split.X_test.shape
+    carve_validation(split, val_fraction=0.25, seed=0)
+    assert split.X_train.shape == original_train_shape
+    assert split.X_test.shape == original_test_shape

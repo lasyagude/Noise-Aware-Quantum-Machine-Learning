@@ -8,7 +8,7 @@ noise attaches to the concrete gate instructions that appear in the
 import pytest
 
 from qml_noise.circuits import build_vqc_circuit, transpile_circuit
-from qml_noise.config import NOISE_PROFILES
+from qml_noise.config import NOISE_CONDITIONS, NOISE_PROFILES, OPTIONAL_NOISE_CONDITIONS
 from qml_noise.metrics import total_variation_distance
 from qml_noise.noise import (
     build_bit_flip_noise_model,
@@ -79,6 +79,42 @@ def test_profile_probabilities_are_ordered_low_below_medium():
     assert low.readout_error < medium.readout_error
     assert NOISE_PROFILES["ideal"].is_ideal
     assert not low.is_ideal
+
+
+def test_low_and_medium_match_the_assignment_guideline_table_exactly():
+    """Level 1 'low' and Level 2 'moderate' from the assignment's noise-level
+    guideline table, not values chosen by this project."""
+    low = NOISE_PROFILES["low"]
+    assert low.single_qubit_depolarizing == pytest.approx(0.001)  # 0.1%
+    assert low.two_qubit_depolarizing == pytest.approx(0.005)  # 0.5%
+    assert low.readout_error == pytest.approx(0.01)  # 1%
+
+    medium = NOISE_PROFILES["medium"]
+    assert medium.single_qubit_depolarizing == pytest.approx(0.01)  # 1%
+    assert medium.two_qubit_depolarizing == pytest.approx(0.02)  # 2%
+    assert medium.readout_error == pytest.approx(0.03)  # 3%
+
+
+def test_optional_high_profile_exists_within_the_tables_stated_range():
+    """Level 3 'high' is optional; the table gives a range (3-5% gate error),
+    not exact numbers, so these specific values are a documented chosen
+    default -- but they must fall inside that stated range."""
+    high = NOISE_PROFILES["high"]
+    assert 0.03 <= high.single_qubit_depolarizing <= 0.05
+    assert 0.03 <= high.two_qubit_depolarizing <= 0.05
+    assert "high" in OPTIONAL_NOISE_CONDITIONS
+    assert "high" not in NOISE_CONDITIONS
+    # high must be the harshest named profile.
+    medium = NOISE_PROFILES["medium"]
+    assert high.single_qubit_depolarizing > medium.single_qubit_depolarizing
+    assert high.two_qubit_depolarizing > medium.two_qubit_depolarizing
+    assert high.readout_error > medium.readout_error
+
+
+def test_high_profile_is_usable_through_get_noise_model():
+    nm = get_noise_model("high")
+    assert nm is not None
+    assert {"sx", "x", "cx", "measure"} <= set(nm.noise_instructions)
 
 
 # -- isolated channels ------------------------------------------------------

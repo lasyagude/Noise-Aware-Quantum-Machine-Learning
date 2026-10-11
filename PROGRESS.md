@@ -2,52 +2,84 @@
 
 | Stage | Sections | Status |
 |---|---|---|
-| 1–3 | env, config, data, classical, VQC, noise, metrics, runner; **full E1–E8 × 5 seeds** | done, committed (`47ec9aa`) |
-| 5 | extensions: split check + pooled stats (done); noise sweep + Breast Cancer | code committed (`c169bcb`); **full runs in progress in your terminal** |
-| 6 | plots (13), circuit diagram, report draft | **new, uncommitted** (this stage) |
-| 4 | section 11 AN-VQC (adaptive selection) | **not started** |
+| 1–3 | env, config, data, classical, VQC, noise, metrics, runner; **full E1–E8 × 5 seeds** | done, committed |
+| 5 | extensions: split check + pooled stats; noise sweep + Breast Cancer (3 seeds) | done, committed |
+| 6 | plots (13), circuit diagram, report draft | done, committed |
+| 4 | section 11 AN-VQC | code + tests + 1-seed smoke done; 3-seed run not run |
+| 7 | **noise-level correction** (this stage) | **done; invalidates some saved results — see below** |
 
-Python 3.14.3, qiskit 2.5.2 / aer 0.17.2. No experiments were run in this stage.
+Python 3.14.3, qiskit 2.5.2 / aer 0.17.2.
 
-## This stage (plots + report)
+## This stage: noise levels corrected to the assignment's guideline table
 
-- `src/qml_noise/plotting.py` + `python -m qml_noise.plotting`: reads only saved results.
-  Generated: `plots/01_degradation_vs_noise`, `02_accuracy_vs_depth`, `03_noise_comparison`
-  (+ `noise_comparison_table.csv/.md`), `04_qubits_vs_performance`, `05_output_distributions`,
-  `06_classical_vs_qml`, `08_accuracy_mean_std`, and `circuit_4q_depth2.png`
-  (Qiskit `draw("mpl")`; needed new dependency `pylatexenc==2.11`, added to `requirements.txt`).
-- **Skipped on purpose** (logged with reasons): `07_standard_vs_adaptive` (no AN-VQC results; the
-  schema it expects is provisional), `extension_noise_sweep` and `extension_breast_cancer`
-  (drawn only when all expected experiment/seed pairs exist; at last check the sweep had 18/60
-  and Breast Cancer 1/40). Re-run `python -m qml_noise.plotting` after your runs finish.
-- Colours: validated categorical slots 1–3 (aqua is <3:1 contrast on light, so every chart also
-  uses distinct markers/hatching, value labels and a CSV table). Fixed two layout defects found by
-  viewing the PNGs (overlapping labels/legends; a 6-qubit line implying a non-existent "low" run).
-- `report/report.md`: all 14 required sections. Real numbers from the 40 E1–E8 rows and the pooled
-  analysis; **15 `PLACEHOLDER` markers** (noise sweep, Breast Cancer, AN-VQC, and the conclusion that
-  depends on them) contain no numbers. 11 references, all located by web search (metadata checked;
-  full texts not read; Du et al. DOI not verified so only arXiv + journal ref are given).
-- Tests: `tests/test_plotting.py`, 13 passed (synthetic rows only inside tests). **205 tests are
-  collected; I did not re-run the full suite** (its training tests count as experiments); the last
-  full pass was 192 tests before this stage's 13 were added.
+**(1) What was in `config.py` vs. the table, before this change:**
 
-## Findings reported in the draft (E1–E8, 5 seeds; every number from `results/`)
+| Profile | Had (1q / 2q / readout) | Table wants (1q / 2q / readout) | Matched? |
+|---|---|---|---|
+| low | 0.1% / 1% / 1% | 0.1% / 0.5% / 1% | 1q ✓, **2q ✗**, readout ✓ |
+| medium | 0.5% / 5% / 3% | 1% / 2% / 3% | **1q ✗**, **2q ✗**, readout ✓ |
+| high | *(did not exist)* | 3–5% / — / higher (optional) | — |
 
-Accuracy: E1 .92, E2 1.00, E3 .86, E4 .96, E5 .95, E6 .95, E7 .88, E8 .91; LogReg/SVM 1.00.
-Depth 4 > depth 2; accuracy *fell* with qubits at depth 4 (confounded with parameter count and an
-unconverged 150-iteration budget). Degradation: E5 +1.0, E6 +1.0, E8 −3.0 pp, all within test-set
-resolution (5 pp steps); bootstrap CIs [0,3], [−2,4], [−5,−1]. TVD is the clean signal:
-0.049 → 0.159 (4q low → medium), 0.271 (6q medium). The E8 improvement is reported as
-suggestive only; its explanations are labelled untested hypotheses.
+So `low`'s two-qubit rate and `medium`'s both gate rates were off; readout was already correct on
+both; `high` didn't exist.
 
-## Your next steps
+**(2) Fixed in `config.py`** (`NOISE_PROFILES`): `low` → 0.001/0.005/0.01, `medium` →
+0.01/0.02/0.03, and a new optional `high` → 0.03/0.05/0.05 (a chosen point inside the
+table's stated 3–5% range, documented as such; not in `NOISE_CONDITIONS`, added to new
+`OPTIONAL_NOISE_CONDITIONS`). Docstrings in `config.py` and `noise.py`, the README, and
+`report/report.md`'s Section 6 methodology table now say `low`/`medium` are **assignment-specified**,
+not chosen defaults. `report/report.md` also got a **stale-data warning** (top of file + above
+Section 9) instead of silently leaving outdated numbers unflagged — the old E5/E6/E8 numbers are
+still there (they're real, just stale), not deleted or rewritten, since doing that honestly requires
+rerunning the experiments, which this stage does not do.
+
+**(3) Affected result files — not regenerated yet:**
+
+| File | Stale rows | Why |
+|---|---|---|
+| `results/vqc_experiment_results.jsonl` (+`.csv`) | E5, E6, E8 (15 of 40) | evaluated under old low/medium |
+| `results/extension_breast_cancer_results.jsonl` (+`.csv`) | BC-E5, BC-E6, BC-E8 (9 of 24) | same |
+| `results/extension_pooled_analysis.json` | entire file | derived from the file above |
+| `plots/01,03,05,06,08*.png` + `noise_comparison_table.*` | all | derived from the matrix file |
+| `report/report.md` §9 (Results), Abstract, Discussion | numbers citing E5/E6/E8 | now marked stale in-place |
+
+**Confirmed unaffected, no action needed:** `results/extension_noise_sweep.jsonl` (sweeps its own
+independent depolarizing probabilities via `build_depolarizing_noise_model` directly — never reads
+`NOISE_PROFILES`); `results/extension_split_check.json` (no noise involved); both classical-baseline
+files (no noise concept); `results/smoke_checks/an_vqc_*` (already labeled smoke-only, never a real
+result, harmless that it used the old "medium"); the AN-VQC 3-seed run (hasn't been executed at all
+yet — when it is, it will automatically use the corrected `"medium"` profile).
+
+**Regeneration — exact commands.** Resume logic keys on `(experiment_id, seed)` and can't tell old
+probabilities from new ones, so a plain rerun would skip the stale rows as "already completed".
+`scripts/remove_stale_noise_rows.py` removes only the stale rows (verified against copies of the
+real files, not run for real — not an experiment, but still deferred per instruction); the
+unaffected ideal rows are then resume-skipped and never retrained.
 
 ```powershell
-# when both extension runs finish (they resume if interrupted):
-python -m qml_noise.plotting                 # draws the two extension figures if complete
+.venv\Scripts\Activate.ps1; $env:PYTHONPATH="src"
+python scripts\remove_stale_noise_rows.py
+python -m qml_noise.experiments --mode full                # ~15 min: retrains only the (4,4)/(6,4) groups, 5 seeds
+python -m qml_noise.extensions breast-cancer --mode full    # ~12 min: retrains only BC's (4,4)/(6,4) groups, 3 seeds
+python -m qml_noise.extensions pooled-analysis              # seconds
+python -m qml_noise.plotting                                # seconds; redraws everything from corrected data
 ```
-Then fill the `PLACEHOLDER`s in `report/report.md` (Section 9.3 and the conclusion).
+Estimates are measured, not guessed: E4/E7 (4,4)/(6,4) ideal training took 80.4s/94.7s per seed in
+the saved 5-seed run; BC's equivalents took ~112s/~120s per seed in the saved 3-seed run. (A simpler
+but slower alternative is `--force` on each command instead of the scrub script — full 8-row ×
+5/3-seed rebuild, ~28 min + ~14 min — if you'd rather not trust the reuse-of-ideal-rows reasoning.)
+After these, fill the now-correct numbers into `report/report.md` (the `STALE`/`PLACEHOLDER` markers
+show exactly where) and regenerate the extension plots (still need `extension_seeds=[0,1,2]` wired
+into `plotting`'s CLI — a pre-existing gap, not new this stage).
+
+**(4) Tests:** `tests/test_noise.py` — 4 new tests (exact table-match for low/medium, `high` within
+its stated range and harsher than medium, `high` usable through `get_noise_model`). Checked every
+other test file for hardcoded noise-dependent numeric assertions (accuracy/degradation/TVD values
+under "medium"/"low"): none found — existing tests check structure/labels/relative ordering, not
+exact magnitudes, so nothing else needed updating. **Full suite: `pytest -q` → 238 passed in 15m03s**
+(includes the full AN-VQC/plotting/extensions suites from prior stages — no regressions from this
+change).
 
 ## Not done
-AN-VQC (section 11), its plot and report section; extension results; README compliance checklist
-(task2 §9); full-suite re-run; committing this stage.
+Regenerating the affected result files (commands above, not run); report.md's stale sections;
+extension plots at 3 seeds; AN-VQC 3-seed run; committing this stage.
